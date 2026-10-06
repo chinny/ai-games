@@ -1,0 +1,404 @@
+<title>Gravity at the Edge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=Rajdhani:wght@500;600;700&display=swap">
+<style>
+/* Layout: full-bleed WebGL cockpit view; HUD floats on canvas layers; overlays slide over for maps, station, menu */
+:root {
+  --void: #020306;
+  --ink: #fff1de;
+  --or: #ff8a1e;
+  --or-2: rgba(255, 138, 30, 0.55);
+  --or-3: rgba(255, 138, 30, 0.16);
+  --or-4: rgba(255, 138, 30, 0.07);
+  --blue: #58b6ff;
+  --blue-3: rgba(88, 182, 255, 0.16);
+  --red: #ff4a36;
+  --green: #7dffb0;
+  --panel: rgba(12, 7, 2, 0.72);
+  --panel-solid: #0b0703;
+  --display: 'Michroma', 'Eurostile', 'Square 721', 'Arial Black', sans-serif;
+  --ui: 'Rajdhani', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+  color-scheme: dark;
+  --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px); --sab: env(safe-area-inset-bottom, 0px);
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; background: var(--void); color: var(--ink); overflow: hidden; overscroll-behavior: none; }
+body { font-family: var(--ui); font-weight: 600; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; touch-action: none; }
+#app { position: fixed; inset: 0; overflow: hidden; }
+#gl, #hud { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#gl { touch-action: none; }
+#hud { pointer-events: none; }
+button { font-family: var(--ui); }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+b { color: var(--ink); font-weight: 700; }
+
+/* cockpit frame */
+#cockpit { position: absolute; inset: 0; pointer-events: none; width: 100%; height: 100%; }
+body.touch #cockpit, body.no-cockpit #cockpit { display: none; }
+
+/* HUD DOM */
+#hud-dom { position: absolute; inset: 0; pointer-events: none; text-transform: uppercase; letter-spacing: 0.06em; }
+.lbl { font-size: 10px; color: var(--or-2); letter-spacing: 0.16em; }
+#sysbox { position: absolute; left: calc(18px + env(safe-area-inset-left, 0px)); top: calc(14px + env(safe-area-inset-top, 0px)); max-width: min(360px, 46vw); padding-left: 10px; border-left: 2px solid var(--or); }
+#sys-name { font-family: var(--display); font-size: 13px; color: var(--or); letter-spacing: 0.08em; line-height: 1.5; text-shadow: 0 0 12px rgba(255,138,30,.35); }
+#sys-class, #sys-bodies { font-size: 11px; color: var(--or-2); line-height: 1.35; }
+#crbox { position: absolute; right: calc(18px + env(safe-area-inset-right, 0px)); top: calc(14px + env(safe-area-inset-top, 0px)); text-align: right; display: grid; gap: 1px; }
+#crbox .row { display: flex; gap: 10px; justify-content: flex-end; align-items: baseline; font-size: 13px; color: var(--or); font-variant-numeric: tabular-nums; }
+#topc { position: absolute; left: 50%; transform: translateX(-50%); top: calc(14px + env(safe-area-inset-top, 0px)); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; width: min(560px, 40vw); }
+#status-line { font-family: var(--display); font-size: 10px; letter-spacing: 0.22em; color: var(--or); }
+#alerts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.alert { font-size: 11px; padding: 2px 8px; border: 1px solid var(--or-2); color: var(--or); background: var(--or-4); }
+.alert.red { border-color: var(--red); color: var(--red); background: rgba(255,74,54,.1); animation: blink 0.8s steps(2) infinite; }
+.alert.blue { border-color: var(--blue); color: var(--blue); background: var(--blue-3); }
+@keyframes blink { 50% { opacity: 0.45; } }
+#objective { font-size: 12px; color: var(--ink); text-transform: none; letter-spacing: 0.02em; background: linear-gradient(90deg, transparent, rgba(88,182,255,.12), transparent); padding: 4px 18px; border-top: 1px solid rgba(88,182,255,.35); max-width: 100%; }
+#objective::before { content: 'Objective · '; color: var(--blue); text-transform: uppercase; letter-spacing: 0.12em; font-size: 10px; }
+#target-panel { position: absolute; right: calc(18px + env(safe-area-inset-right, 0px)); bottom: 168px; width: 280px; padding: 10px 12px 10px 14px; background: linear-gradient(180deg, var(--or-3), var(--or-4) 60%, transparent); border-top: 1px solid var(--or-2); }
+#target-panel.mapped { background: linear-gradient(180deg, var(--blue-3), rgba(88,182,255,.04) 60%, transparent); border-top-color: var(--blue); }
+#tgt-name { font-family: var(--display); font-size: 12px; color: var(--ink); letter-spacing: 0.06em; line-height: 1.45; }
+#tgt-type { font-size: 12px; color: var(--or); }
+#tgt-dist { font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
+#tgt-status { font-size: 11px; color: var(--or-2); }
+#tgt-val { font-size: 12px; color: var(--blue); margin-top: 2px; }
+#comms { position: absolute; left: calc(18px + env(safe-area-inset-left, 0px)); bottom: 212px; width: min(360px, 34vw); display: flex; flex-direction: column; gap: 3px; font-size: 13px; text-transform: none; letter-spacing: 0.02em; color: var(--or); }
+.cm { padding-left: 8px; border-left: 1px solid var(--or-2); text-shadow: 0 0 6px #000; }
+.cm .b, .cm.b { color: var(--blue); }
+.cm .r { color: var(--red); }
+#center-msg { position: absolute; left: 50%; top: 23%; transform: translateX(-50%); text-align: center; width: min(90vw, 760px); }
+.cm-main { font-family: var(--display); font-size: clamp(16px, 2.6vw, 28px); color: var(--or); letter-spacing: 0.14em; text-shadow: 0 0 22px rgba(255,138,30,.45); animation: rise 0.5s ease-out; }
+.cm-main.blue { color: var(--blue); text-shadow: 0 0 22px rgba(88,182,255,.5); }
+.cm-main.red { color: var(--red); text-shadow: 0 0 22px rgba(255,74,54,.5); }
+.cm-main.green { color: var(--green); text-shadow: 0 0 22px rgba(125,255,176,.4); }
+.cm-sub { margin-top: 8px; font-size: 14px; color: var(--ink); text-transform: none; letter-spacing: 0.04em; opacity: 0.85; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); letter-spacing: 0.3em; } }
+#hint-line { position: absolute; left: 50%; transform: translateX(-50%); bottom: 186px; font-size: 13px; color: var(--ink); padding: 3px 12px; background: rgba(0,0,0,.35); border: 1px solid var(--or-2); white-space: nowrap; }
+
+#hud-btns { position: absolute; right: calc(18px + env(safe-area-inset-right, 0px)); top: calc(80px + env(safe-area-inset-top, 0px)); display: flex; gap: 6px; }
+.hbtn { pointer-events: auto; background: var(--or-4); border: 1px solid var(--or-2); color: var(--or); font-size: 12px; font-weight: 700; letter-spacing: 0.12em; padding: 6px 10px; cursor: pointer; }
+.hbtn:hover { background: var(--or-3); color: var(--ink); }
+
+/* FX layers */
+#fsdfx { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.4s; background: radial-gradient(ellipse at center, transparent 45%, rgba(88,150,255,.18) 75%, rgba(140,180,255,.35) 100%); }
+#fsdfx.on { opacity: 1; animation: fsd 0.35s ease-in-out infinite alternate; }
+@keyframes fsd { to { filter: brightness(1.6); } }
+#flash, #fade { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+#fade { background: #000; }
+
+/* hyperspace caption */
+#hyper-info { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); text-align: center; pointer-events: none; }
+#hyper-info .lbl { color: rgba(190,215,255,.7); }
+#hyper-dest { font-family: var(--display); font-size: clamp(14px, 2.2vw, 22px); color: #dbe8ff; letter-spacing: 0.14em; margin: 6px 0; text-shadow: 0 0 20px rgba(120,170,255,.8); }
+#hyper-sub { font-size: 13px; color: rgba(200,220,255,.75); letter-spacing: 0.12em; }
+
+/* touch controls */
+#touch { position: absolute; inset: 0; pointer-events: none; }
+#stick-zone { position: absolute; left: 0; bottom: 0; width: 46%; height: 52%; pointer-events: auto; touch-action: none; }
+#stick-base { position: absolute; left: calc(92px + env(safe-area-inset-left, 0px)); top: calc(100% - 104px - env(safe-area-inset-bottom, 0px)); width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%; border: 1.5px solid var(--or-2); background: radial-gradient(circle, var(--or-4), transparent 70%); opacity: 0.75; }
+#stick-base.active { opacity: 1; border-color: var(--or); }
+#stick-knob { position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, rgba(255,170,90,.55), rgba(255,138,30,.25)); border: 1px solid var(--or); }
+#stick-base::after { content: 'PITCH · ROLL'; position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); font-size: 9px; letter-spacing: 0.16em; color: var(--or-2); white-space: nowrap; }
+#thr-wrap { position: absolute; right: calc(12px + env(safe-area-inset-right, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); width: 46px; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: auto; }
+#thr-track { position: relative; width: 40px; height: 196px; border: 1px solid var(--or-2); background: rgba(0,0,0,.35); touch-action: none; }
+#thr-fill { position: absolute; left: 4px; right: 4px; bottom: 0; background: linear-gradient(to top, rgba(255,138,30,.65), rgba(255,138,30,.25)); }
+#thr-blue { position: absolute; left: 0; right: 0; bottom: 50%; height: 25%; background: rgba(88,182,255,.22); border-top: 1px solid var(--blue); border-bottom: 1px solid var(--blue); }
+#thr-knob { position: absolute; left: -4px; right: -4px; height: 6px; background: var(--ink); box-shadow: 0 0 8px var(--or); }
+.tlabel { font-size: 9px; letter-spacing: 0.16em; color: var(--or-2); }
+#tbtns { position: absolute; right: calc(68px + env(safe-area-inset-right, 0px)); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(2, 60px); gap: 6px; pointer-events: auto; }
+.tb { height: 40px; border: 1px solid var(--or-2); background: rgba(14, 8, 2, .55); color: var(--or); font-weight: 700; font-size: 12px; letter-spacing: 0.08em; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; touch-action: none; padding: 0; }
+.tb small { font-size: 8px; letter-spacing: 0.14em; color: var(--or-2); margin-top: 3px; }
+.tb.down { background: var(--or-3); color: var(--ink); border-color: var(--or); }
+.tb.dim { opacity: 0.35; }
+.tb.blue { color: var(--blue); border-color: rgba(88,182,255,.55); }
+body.touch #hud-btns { top: calc(62px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); gap: 4px; }
+body.touch .hbtn { font-size: 11px; padding: 6px 7px; letter-spacing: 0.08em; }
+body.touch #comms { left: calc(12px + env(safe-area-inset-left, 0px)); bottom: auto; top: calc(104px + env(safe-area-inset-top, 0px)); width: 44vw; font-size: 11px; }
+body.touch #target-panel { right: calc(10px + env(safe-area-inset-right, 0px)); bottom: auto; top: calc(100px + env(safe-area-inset-top, 0px)); width: 44vw; max-width: 230px; padding: 7px 9px; box-sizing: border-box; }
+body.touch #sysbox { max-width: 44vw; }
+body.touch #tgt-dist { font-size: 16px; }
+body.touch #tgt-name { font-size: 10px; }
+body.touch #sysbox { left: 12px; top: calc(10px + env(safe-area-inset-top, 0px)); }
+body.touch #crbox { right: 12px; top: calc(10px + env(safe-area-inset-top, 0px)); }
+body.touch #crbox .row { font-size: 11px; }
+body.touch #sys-name { font-size: 10px; }
+body.touch #topc { top: auto; bottom: calc(326px + env(safe-area-inset-bottom, 0px)); width: 92vw; }
+body.touch #hint-line { bottom: calc(462px + env(safe-area-inset-bottom, 0px)); font-size: 12px; white-space: normal; text-align: center; max-width: 86vw; }
+body.touch #center-msg { top: 31%; }
+body.touch #objective { font-size: 11px; }
+@media (orientation: landscape) {
+  body.touch #topc { top: calc(8px + env(safe-area-inset-top, 0px)); bottom: auto; width: 40vw; }
+  body.touch #hint-line { bottom: auto; top: 46%; }
+  body.touch #center-msg { top: 24%; }
+  body.touch #comms { top: calc(140px + env(safe-area-inset-top, 0px)); width: 32vw; }
+  body.touch #comms .cm:nth-last-child(n+4) { display: none; }
+  body.touch #center-msg { width: 50vw; }
+  body.touch .cm-main { font-size: 17px; }
+  body.touch .cm-sub { font-size: 12px; }
+  body.touch #target-panel { top: calc(96px + env(safe-area-inset-top, 0px)); width: 30vw; }
+  body.touch #sysbox { max-width: 30vw; }
+  body.touch #hud-btns { top: calc(60px + env(safe-area-inset-top, 0px)); }
+  body.touch #tbtns { grid-template-columns: repeat(4, 56px); }
+  body.touch #thr-track { height: 150px; }
+}
+
+/* overlay panels */
+.overlay { position: absolute; inset: 0; z-index: 20; }
+.ptitle { font-family: var(--display); font-size: 13px; color: var(--or); letter-spacing: 0.12em; }
+.btn { background: var(--or-4); border: 1px solid var(--or-2); color: var(--or); font-size: 13px; font-weight: 700; letter-spacing: 0.12em; padding: 9px 14px; cursor: pointer; text-transform: uppercase; }
+.btn:hover:not(:disabled) { background: var(--or-3); color: var(--ink); }
+.btn.primary { background: var(--or); color: #120800; border-color: var(--or); }
+.btn.primary:hover:not(:disabled) { background: #ffa04a; color: #120800; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.xbtn { background: none; border: 1px solid var(--or-2); color: var(--or); width: 34px; height: 34px; font-size: 16px; cursor: pointer; }
+
+#nav-panel { position: absolute; left: 0; top: 0; bottom: 0; width: min(440px, 100%); z-index: 15; background: linear-gradient(90deg, rgba(8,5,2,.94), rgba(8,5,2,.86)); border-right: 1px solid var(--or-2); display: flex; flex-direction: column; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(12px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px)); box-sizing: border-box; gap: 10px; }
+.nav-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.nav-head .lbl { display: block; margin-bottom: 3px; }
+#nav-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; min-height: 0; touch-action: pan-y; }
+.nrow { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; background: rgba(255,138,30,.04); border: 1px solid transparent; border-left: 2px solid var(--or-3); color: var(--ink); padding: 8px 10px; cursor: pointer; }
+.nrow:hover { background: var(--or-3); }
+.nrow.sel { border-color: var(--or-2); border-left-color: var(--or); background: var(--or-3); }
+.nrow.k-moon { margin-left: 18px; }
+.nmain { display: flex; flex-direction: column; min-width: 0; }
+.nname { font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ntype { font-size: 11px; color: var(--or); text-transform: uppercase; letter-spacing: 0.06em; }
+.ntags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+.tag { font-size: 9px; letter-spacing: 0.1em; padding: 1px 5px; border: 1px solid var(--or-2); color: var(--or); }
+.tag.tf, .tag.sc { border-color: var(--green); color: var(--green); }
+.tag.mp { border-color: var(--blue); color: var(--blue); }
+.nside { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; }
+.ndist { font-size: 13px; color: var(--ink); }
+.nval { font-size: 11px; color: var(--blue); }
+.nicon { width: 14px; height: 14px; justify-self: center; }
+.nicon.star { border-radius: 50%; background: radial-gradient(circle, #fff, var(--or)); box-shadow: 0 0 8px var(--or); }
+.nicon.planet { border-radius: 50%; border: 1.5px solid var(--or); }
+.nicon.moon { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--or-2); }
+.nicon.station { border: 1.5px solid var(--green); transform: rotate(45deg); width: 10px; height: 10px; }
+#nav-foot { font-size: 11px; color: var(--or-2); text-transform: uppercase; letter-spacing: 0.08em; }
+
+#galmap { background: #05070c; z-index: 25; }
+#gm-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+#gm-top { position: absolute; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; align-items: center; padding: calc(12px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-right, 0px)) 10px calc(16px + env(safe-area-inset-left, 0px)); background: linear-gradient(180deg, rgba(5,7,12,.95), transparent); pointer-events: none; }
+#gm-top > * { pointer-events: auto; }
+#gm-top .tools { display: flex; gap: 6px; }
+#gm-info { position: absolute; right: calc(16px + env(safe-area-inset-right, 0px)); top: calc(70px + env(safe-area-inset-top, 0px)); width: min(330px, calc(100% - 32px)); background: rgba(8,6,4,.88); border-top: 1px solid var(--or); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; }
+.gm-title { font-family: var(--display); font-size: 12px; color: var(--ink); letter-spacing: 0.06em; line-height: 1.5; }
+.gm-row { font-size: 13px; color: var(--or); text-transform: uppercase; letter-spacing: 0.05em; }
+.gm-row.route { color: var(--blue); }
+.gm-row.err { color: var(--red); }
+.gm-row .scoop { color: var(--green); }
+.gm-row .stn { color: var(--green); }
+.gm-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 0; }
+.gm-btns { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+@media (max-width: 640px) { #gm-info { top: auto; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); right: 16px; left: 16px; width: auto; } }
+
+#station { background: radial-gradient(ellipse at 70% 20%, rgba(255,138,30,.10), transparent 55%), linear-gradient(180deg, #0b0703, #050302); overflow-y: auto; touch-action: pan-y; }
+.st-wrap { max-width: 980px; margin: 0 auto; padding: calc(28px + env(safe-area-inset-top, 0px)) 18px calc(28px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 18px; }
+.st-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--or-2); padding-bottom: 14px; }
+#st-name { font-family: var(--display); font-size: clamp(18px, 3vw, 28px); color: var(--or); letter-spacing: 0.1em; text-wrap: balance; }
+#st-sys { font-size: 13px; color: var(--or-2); letter-spacing: 0.16em; }
+.st-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.st-card { background: rgba(255,138,30,.05); border-top: 1px solid var(--or-2); padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.st-card.wide { grid-column: 1 / -1; }
+.st-card h3 { margin: 0; font-family: var(--display); font-size: 11px; font-weight: 400; color: var(--or); letter-spacing: 0.14em; }
+.st-big { font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.st-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 14px; font-size: 13px; color: var(--or); padding: 5px 0; border-bottom: 1px solid var(--or-4); text-transform: uppercase; letter-spacing: 0.04em; }
+.st-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-empty { font-size: 13px; color: var(--or-2); }
+#st-data { max-height: 220px; overflow-y: auto; }
+.rankbar { height: 6px; background: var(--or-4); border: 1px solid var(--or-3); }
+#st-rankbar { height: 100%; background: var(--or); }
+#st-promo { font-family: var(--display); color: var(--blue); font-size: 14px; letter-spacing: 0.12em; }
+.st-launch { align-self: flex-start; font-size: 15px; padding: 12px 34px; }
+
+.modal { position: absolute; inset: 0; z-index: 30; background: rgba(2,2,4,.72); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+.mbox { width: min(560px, 100%); max-height: 100%; overflow-y: auto; background: var(--panel-solid); border-top: 2px solid var(--or); padding: 18px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; touch-action: pan-y; }
+.mrow { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 13px; color: var(--or); text-transform: uppercase; letter-spacing: 0.08em; }
+.mrow input[type=range] { width: 100%; accent-color: var(--or); }
+.mrow select { background: #160d04; color: var(--ink); border: 1px solid var(--or-2); padding: 5px; font-family: var(--ui); font-weight: 600; }
+.mrow input[type=checkbox] { accent-color: var(--or); width: 18px; height: 18px; }
+.keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 3px 16px; font-size: 13px; color: var(--ink); }
+.keys div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--or-4); padding: 3px 0; }
+.keys kbd { font-family: var(--ui); font-weight: 700; color: var(--or); }
+#menu-stats { font-size: 13px; color: var(--or); line-height: 1.5; }
+.mbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.now { font-size: 12px; color: var(--or-2); letter-spacing: 0.1em; text-transform: uppercase; }
+
+/* title */
+#title { position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-end; background: linear-gradient(90deg, rgba(2,3,6,.88) 0%, rgba(2,3,6,.55) 42%, rgba(2,3,6,0) 70%), linear-gradient(0deg, rgba(2,3,6,.8), transparent 45%); overflow-y: auto; touch-action: pan-y; }
+.t-wrap { padding: calc(30px + env(safe-area-inset-top, 0px)) calc(24px + env(safe-area-inset-right, 0px)) calc(34px + env(safe-area-inset-bottom, 0px)) calc(clamp(20px, 6vw, 84px) + env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 18px; max-width: 640px; }
+.t-eyebrow { font-size: 12px; letter-spacing: 0.32em; color: var(--or-2); text-transform: uppercase; }
+.t-title { font-family: var(--display); font-weight: 400; font-size: clamp(28px, 5.4vw, 58px); line-height: 1.08; letter-spacing: 0.06em; margin: 0; color: var(--ink); text-wrap: balance; }
+.t-title span { color: var(--or); display: block; text-shadow: 0 0 30px rgba(255,138,30,.45); }
+.t-rule { height: 1px; width: 180px; background: linear-gradient(90deg, var(--or), transparent); }
+.t-lede { font-size: 16px; font-weight: 500; line-height: 1.5; color: rgba(255,241,222,.82); max-width: 54ch; margin: 0; }
+.t-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: stretch; }
+.t-form label { display: flex; flex-direction: column; gap: 4px; font-size: 10px; color: var(--or-2); letter-spacing: 0.2em; text-transform: uppercase; }
+#cmdr-input { box-sizing: border-box; background: rgba(0,0,0,.5); border: 1px solid var(--or-2); color: var(--ink); font-family: var(--ui); font-weight: 600; font-size: 16px; padding: 9px 12px; width: 210px; letter-spacing: 0.08em; text-transform: uppercase; user-select: text; -webkit-user-select: text; }
+#btn-launch { align-self: flex-end; font-size: 15px; padding: 11px 30px; }
+#btn-new { align-self: flex-end; }
+#title-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--or); letter-spacing: 0.12em; }
+#title-stats:empty { display: none; }
+#new-confirm { font-size: 13px; color: var(--ink); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.t-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 18px; font-size: 12px; color: rgba(255,241,222,.75); max-width: 520px; }
+.t-keys kbd { font-family: var(--ui); color: var(--or); font-weight: 700; margin-right: 6px; }
+body.touch .t-keys.desk { display: none; }
+body:not(.touch) .t-keys.mob { display: none; }
+.t-music { font-size: 11px; color: var(--or-2); letter-spacing: 0.18em; text-transform: uppercase; }
+#boot-error { position: absolute; left: 16px; right: 16px; top: 16px; z-index: 50; background: #200; color: #fbb; padding: 12px; font-size: 14px; }
+@media (max-width: 520px) { .t-keys { grid-template-columns: 1fr; } #cmdr-input { width: 100%; } .t-form label { flex: 1 1 100%; } .t-eyebrow { letter-spacing: 0.18em; font-size: 11px; } .t-lede { font-size: 15px; } }
+@media (max-width: 640px) and (orientation: portrait) { #title { background: linear-gradient(0deg, rgba(2,3,6,.94) 0%, rgba(2,3,6,.8) 50%, rgba(2,3,6,.2) 75%, transparent 90%); } }
+@media (prefers-reduced-motion: reduce) { .cm-main, #fsdfx.on, .alert.red { animation: none; } }
+</style>
+
+<div id="app">
+  <canvas id="gl"></canvas>
+  <svg id="cockpit" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="dash" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050302" stop-opacity="0.15"/><stop offset="0.35" stop-color="#050302" stop-opacity="0.78"/><stop offset="1" stop-color="#020101" stop-opacity="0.95"/></linearGradient>
+    </defs>
+    <path d="M0,100 L0,86 C18,81.5 34,80 50,80 C66,80 82,81.5 100,86 L100,100 Z" fill="url(#dash)"/>
+    <path d="M0,86 C18,81.5 34,80 50,80 C66,80 82,81.5 100,86" fill="none" stroke="#ff8a1e" stroke-opacity="0.28" stroke-width="0.15" vector-effect="non-scaling-stroke"/>
+    <path d="M0,0 L5.5,0 L1.4,58 L0,64 Z" fill="#050302" fill-opacity="0.9"/>
+    <path d="M100,0 L94.5,0 L98.6,58 L100,64 Z" fill="#050302" fill-opacity="0.9"/>
+    <path d="M5.5,0 L1.4,58" stroke="#ff8a1e" stroke-opacity="0.18" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <path d="M94.5,0 L98.6,58" stroke="#ff8a1e" stroke-opacity="0.18" stroke-width="1" vector-effect="non-scaling-stroke"/>
+  </svg>
+  <canvas id="hud"></canvas>
+  <div id="fsdfx"></div>
+  <div id="hud-dom" hidden>
+    <div id="sysbox"><div class="lbl">Current system</div><div id="sys-name"></div><div id="sys-class"></div><div id="sys-bodies"></div></div>
+    <div id="crbox">
+      <div class="row"><span class="lbl">Balance</span><span id="cr-val"></span></div>
+      <div class="row"><span class="lbl">Unsold data</span><span id="data-val"></span></div>
+      <div class="row"><span class="lbl">Explorer</span><span id="rank-val"></span></div>
+    </div>
+    <div id="topc"><div id="status-line"></div><div id="alerts"></div><div id="objective" hidden></div></div>
+    <div id="target-panel" hidden><div class="lbl">Target</div><div id="tgt-name"></div><div id="tgt-type"></div><div id="tgt-dist"></div><div id="tgt-status"></div><div id="tgt-val"></div></div>
+    <div id="comms"></div>
+    <div id="center-msg" hidden></div>
+    <div id="hint-line" hidden></div>
+  </div>
+  <div id="hud-btns" hidden>
+    <button class="hbtn" data-ui="nav" title="System list (N)">SYSTEM</button>
+    <button class="hbtn" data-ui="map" title="Galaxy map (M)">GALAXY</button>
+    <button class="hbtn" data-ui="menu" title="Menu (Esc)">MENU</button>
+  </div>
+  <div id="hyper-info" hidden><div class="lbl">Witch-space transit</div><div id="hyper-dest"></div><div id="hyper-sub"></div></div>
+
+  <div id="touch" hidden>
+    <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
+    <div id="thr-wrap"><div id="thr-track"><div id="thr-blue"></div><div id="thr-fill"></div><div id="thr-knob"></div></div><div class="tlabel">THROTTLE</div></div>
+    <div id="tbtns">
+      <button class="tb blue" id="b-sc" data-act="sc">FSD</button>
+      <button class="tb blue" id="b-hyper" data-act="hyper">JUMP</button>
+      <button class="tb" id="b-honk">HONK<small>HOLD</small></button>
+      <button class="tb" id="b-map" data-act="scan">SURVEY</button>
+      <button class="tb" id="b-tgt" data-act="nextTarget">TARGET</button>
+      <button class="tb" id="b-boost" data-act="boost">BOOST</button>
+      <button class="tb" id="b-dock" data-act="dock">DOCK</button>
+      <button class="tb" id="b-zero" data-act="zeroThrottle">STOP<small>THR 0</small></button>
+    </div>
+  </div>
+
+  <div id="flash"></div>
+  <div id="fade"></div>
+
+  <div id="nav-panel" hidden>
+    <div class="nav-head"><div><span class="lbl">System navigation</span><div class="ptitle" id="nav-title"></div></div><button class="xbtn" id="nav-close" aria-label="Close">✕</button></div>
+    <div id="nav-list"></div>
+    <button class="btn" id="nav-honk">Run discovery scan</button>
+    <div id="nav-foot"></div>
+  </div>
+
+  <div id="galmap" class="overlay" hidden>
+    <canvas id="gm-canvas"></canvas>
+    <div id="gm-top"><div><div class="lbl">Galaxy map</div><div class="ptitle">LOCAL STELLAR NEIGHBOURHOOD</div></div>
+      <div class="tools"><button class="btn" id="gm-zin" aria-label="Zoom in">+</button><button class="btn" id="gm-zout" aria-label="Zoom out">−</button><button class="btn" id="gm-center">HERE</button><button class="xbtn" id="gm-close" aria-label="Close">✕</button></div></div>
+    <div id="gm-info"></div>
+  </div>
+
+  <div id="station" class="overlay" hidden>
+    <div class="st-wrap">
+      <div class="st-head"><div><div class="lbl">Docked · Station services</div><div id="st-name"></div><div id="st-sys"></div></div><div style="text-align:right"><div class="lbl">Balance</div><div class="st-big" id="st-cr"></div></div></div>
+      <div id="st-promo" hidden></div>
+      <div class="st-grid">
+        <div class="st-card wide"><h3>UNIVERSAL CARTOGRAPHICS</h3><div id="st-data"></div><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><div class="lbl">Total unsold</div><div class="st-big" id="st-total"></div></div><button class="btn primary" id="st-sell">SELL ALL DATA</button></div></div>
+        <div class="st-card"><h3>REFUEL</h3><div class="st-big" id="st-fuel"></div><button class="btn" id="st-refuel"></button></div>
+        <div class="st-card"><h3>REPAIR</h3><div class="st-big" id="st-hull"></div><button class="btn" id="st-repair"></button></div>
+        <div class="st-card"><h3>EXPLORER RANK</h3><div class="st-big" id="st-rank"></div><div class="rankbar"><div id="st-rankbar"></div></div><div class="st-empty" id="st-next"></div></div>
+      </div>
+      <div class="mbtns"><button class="btn primary st-launch" id="st-launch">LAUNCH</button><button class="btn" id="st-map">GALAXY MAP · PLAN ROUTE</button></div>
+    </div>
+  </div>
+
+  <div id="menu" class="modal" hidden>
+    <div class="mbox">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div class="ptitle">SHIP SYSTEMS</div><button class="btn primary" id="menu-resume">RESUME</button></div>
+      <div id="menu-stats"></div>
+      <div class="now">♪ Now playing · Gravity at the Edge</div>
+      <div class="mrow"><span>Music</span><input type="range" id="set-music" min="0" max="1" step="0.05"></div>
+      <div class="mrow"><span>Effects</span><input type="range" id="set-sfx" min="0" max="1" step="0.05"></div>
+      <div class="mrow"><span>Steering feel</span><input type="range" id="set-sens" min="0.4" max="2" step="0.1"></div>
+      <div class="mrow"><span>Graphics</span><select id="set-quality"><option value="auto">Auto</option><option value="high">High</option><option value="med">Medium</option><option value="low">Low (no bloom)</option></select></div>
+      <div class="mrow"><span>Invert pitch</span><input type="checkbox" id="set-invert"></div>
+      <div class="mrow"><span>Ship voice</span><input type="checkbox" id="set-voice"></div>
+      <div class="mrow"><span>Cockpit frame</span><input type="checkbox" id="set-cockpit"></div>
+      <div class="keys">
+        <div><span>Throttle up / down</span><kbd>W / S</kbd></div>
+        <div><span>Pitch · yaw (mouse)</span><kbd>Click to capture</kbd></div>
+        <div><span>Pitch · roll</span><kbd>Arrows</kbd></div>
+        <div><span>Roll / yaw</span><kbd>A D / Q E</kbd></div>
+        <div><span>Thrusters</span><kbd>R F Z V</kbd></div>
+        <div><span>Stop / blue zone</span><kbd>X / B</kbd></div>
+        <div><span>Boost</span><kbd>Tab</kbd></div>
+        <div><span>Supercruise · drop</span><kbd>J</kbd></div>
+        <div><span>Hyperspace jump</span><kbd>H</kbd></div>
+        <div><span>Discovery scan</span><kbd>Hold Space</kbd></div>
+        <div><span>Surface survey</span><kbd>C</kbd></div>
+        <div><span>Next target / ahead</span><kbd>T / G</kbd></div>
+        <div><span>System list</span><kbd>N</kbd></div>
+        <div><span>Galaxy map</span><kbd>M</kbd></div>
+        <div><span>Request docking</span><kbd>L</kbd></div>
+        <div><span>Music on/off</span><kbd>P</kbd></div>
+      </div>
+      <div class="mbtns"><button class="btn" id="menu-fuel" hidden>CALL FUEL DRONE (+8 T)</button><button class="btn" id="menu-title">SAVE &amp; EXIT TO TITLE</button></div>
+    </div>
+  </div>
+
+  <div id="dead" class="modal" hidden>
+    <div class="mbox"><div class="ptitle" style="color:var(--red)">SHIP DESTROYED</div><div id="dead-sub" style="font-size:14px"></div><div style="font-size:13px;color:var(--or)">Your insurer will deliver a replacement explorer to your last station.</div><div class="mbtns"><button class="btn primary" id="dead-rebuy">REBUY SHIP</button></div></div>
+  </div>
+
+  <div id="title">
+    <div class="t-wrap">
+      <div class="t-eyebrow">Deep-space exploration · Pilot terminal</div>
+      <h1 class="t-title">Gravity at <span>the Edge</span></h1>
+      <div class="t-rule"></div>
+      <p class="t-lede">Fly an explorer out of the populated bubble. Honk unknown systems, survey worlds nobody has seen, skim stars for fuel, chase neutron jets — then bring the data home and sell it.</p>
+      <div id="title-stats"></div>
+      <div class="t-form">
+        <label for="cmdr-input">Commander name<input id="cmdr-input" maxlength="24" placeholder="Nova" autocomplete="off" spellcheck="false"></label>
+        <button class="btn primary" id="btn-launch">LAUNCH</button>
+        <button class="btn" id="btn-new" hidden>NEW COMMANDER</button>
+      </div>
+      <div id="new-confirm" hidden>Start over? Your credits, rank and discoveries will be reset. <button class="btn" id="btn-new-yes">YES, RESET</button><button class="btn" id="btn-new-no">CANCEL</button></div>
+      <div class="t-keys desk">
+        <div><kbd>W/S</kbd>Throttle</div><div><kbd>Mouse</kbd>Steer (click to capture)</div>
+        <div><kbd>J</kbd>Supercruise / drop</div><div><kbd>Space</kbd>Hold to honk</div>
+        <div><kbd>C</kbd>Survey target</div><div><kbd>N / M</kbd>System list / galaxy map</div>
+        <div><kbd>H</kbd>Hyperspace jump</div><div><kbd>L</kbd>Request docking</div>
+      </div>
+      <div class="t-keys mob">
+        <div><kbd>Left stick</kbd>Pitch &amp; roll</div><div><kbd>Right slider</kbd>Throttle</div>
+        <div><kbd>FSD</kbd>Supercruise / drop</div><div><kbd>HONK</kbd>Hold to scan system</div>
+        <div><kbd>Tap a marker</kbd>Target it</div><div><kbd>SYSTEM / GALAXY</kbd>Maps</div>
+      </div>
+      <div class="t-music">♪ Soundtrack · Gravity at the Edge</div>
+    </div>
+  </div>
+  <div id="boot-error" hidden></div>
+</div>
+<script>
+/*__GAME_JS__*/
+</script>
