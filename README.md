@@ -9,6 +9,7 @@ Collection of experimental browser games made with Claude. **Play them at https:
 | [Rimward](rimward/) | Fly past the last charted stars: scan worlds, ride gravity wells, skim stars for fuel, bank survey data at a relay. | single file + soundtrack |
 | [Gravity at the Edge](gravity-at-the-edge/) | Bigger take on Rimward: an explorer ship, galaxy map, honking systems, neutron jets, selling data for credits. | [`source/`](gravity-at-the-edge/source/) (esbuild + three.js) |
 | [Midnight in the Sprawl](midnight-in-the-sprawl/) | Walk the rain-soaked neon streets of a cyberpunk city with an original soundtrack. | [`src/`](midnight-in-the-sprawl/src/) |
+| [Port Calder](port-calder/) | Open-world city by the bay: walk the streets, jack any car you can get into, drift through the cul-de-sacs. | single file |
 
 ## Rebuilding
 
