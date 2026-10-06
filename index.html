@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Games</title>
+<meta name="description" content="Experimental browser games made with Claude.">
+<style>
+  :root {
+    --bg: #0d0f14; --card: #161a22; --line: #262c38; --text: #e6e8ee; --muted: #8b93a5;
+    --accent: #7cc4ff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f6f7f9; --card: #fff; --line: #dde1e8; --text: #161a22; --muted: #5b6475; --accent: #1f6fd1; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 56px 16px 40px; }
+  h1 { font-size: 2.2rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .lede { color: var(--muted); margin: 0 0 36px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  a.card {
+    display: flex; flex-direction: column; gap: 8px; padding: 20px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    color: inherit; text-decoration: none; transition: border-color .15s, transform .15s;
+  }
+  a.card:hover, a.card:focus-visible { border-color: var(--accent); transform: translateY(-2px); outline: none; }
+  .card h2 { font-size: 1.15rem; margin: 0; }
+  .card p { margin: 0; color: var(--muted); font-size: .95rem; flex: 1; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .tags span {
+    font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px 8px;
+  }
+  .play { color: var(--accent); font-weight: 600; font-size: .9rem; }
+  footer { margin-top: 40px; color: var(--muted); font-size: .85rem; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>AI Games</h1>
+  <p class="lede">Experimental browser games made with Claude. Best on a desktop browser with WebGL 2.</p>
+
+  <div class="grid">
+    <a class="card" href="be-kind-rewind/">
+      <h2>Be Kind, Rewind</h2>
+      <p>New Year's Eve 1999, home alone. Explore the house and find every hidden memory before the ball drops.</p>
+      <div class="tags"><span>exploration</span><span>3D</span></div>
+      <span class="play">Play →</span>
+    </a>
+    <a class="card" href="blockhaven/">
+      <h2>Blockhaven</h2>
+      <p>An endless voxel world of grass, stone and timber. Dig anywhere, build anything.</p>
+      <div class="tags"><span>sandbox</span><span>voxel</span></div>
+      <span class="play">Play →</span>
+    </a>
+    <a class="card" href="rimward/">
+      <h2>Rimward</h2>
+      <p>Fly past the last charted stars. Scan worlds, ride gravity wells, skim stars for fuel and bank your survey data.</p>
+      <div class="tags"><span>space</span><span>2D</span><span>soundtrack</span></div>
+      <span class="play">Play →</span>
+    </a>
+    <a class="card" href="gravity-at-the-edge/">
+      <h2>Gravity at the Edge</h2>
+      <p>Take an explorer ship out of the bubble. Honk unknown systems, chase neutron jets, sell the data back home.</p>
+      <div class="tags"><span>space</span><span>3D</span><span>soundtrack</span></div>
+      <span class="play">Play →</span>
+    </a>
+    <a class="card" href="midnight-in-the-sprawl/">
+      <h2>Midnight in the Sprawl</h2>
+      <p>Walk the rain-soaked neon streets of a city that never powers down, set to an original soundtrack.</p>
+      <div class="tags"><span>cyberpunk</span><span>3D</span><span>soundtrack</span></div>
+      <span class="play">Play →</span>
+    </a>
+  </div>
+
+  <footer>Source on <a href="https://github.com/chinny/ai-games">GitHub</a>.</footer>
+</main>
+</body>
+</html>
