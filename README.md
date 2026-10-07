@@ -13,6 +13,7 @@ Collection of experimental browser games made with Claude. **Play them at https:
 | [Vyrium](vyrium/) | Looter shooter: 58 zones, 5 professions, procedurally generated guns. | [`source/`](vyrium/source/) (three.js, vendored) |
 | [Hollowmere](hollowmere/) | PS1-style horror: a deserted 1888 village in a thunderstorm. Find eight pages while something tall hunts you. | [`source/`](hollowmere/source/) (three.js, vendored) |
 | [Calamity Bay](calamity-bay/) | Kaiju rampage: play a sea or mountain monster and topple a city of breakable towers while police, tanks, helicopters and jets fight back. | [`source/`](calamity-bay/source/) (three.js, vendored) |
+| [Studworks](studworks/) | Brick-building sandbox: snap bricks, plates, tiles and slopes onto a baseplate in 26 classic colors. Move, copy, paint, undo, save to file. | [`source/`](studworks/source/) (three.js, vendored) |
 
 ## Rebuilding
 
@@ -21,6 +22,7 @@ Collection of experimental browser games made with Claude. **Play them at https:
 - **Vyrium:** `cd vyrium/source && mkdir -p dist && python3 build.py` → copy `dist/vyrium.html` over `../index.html`.
 - **Calamity Bay:** `cd calamity-bay/source && python3 build.py` → writes `../index.html` directly. Open with `#debug` for a `window.CB` test hook (`CB.sim(seconds)` fast-forwards the simulation).
 - **Hollowmere:** `cd hollowmere/source && python3 build.py` → writes `../index.html` directly. Open with `#debug` to get a `window.HM` test hook.
+- **Studworks:** `cd studworks/source && python3 build.py` → writes `../index.html` directly. Open with `#debug` for a `window.SW` test hook. New parts go in the catalog at the bottom of `src/01_core.js`.
 
 ## Running locally
 

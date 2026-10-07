@@ -1,0 +1,244 @@
+<title>Studworks</title>
+<meta name="description" content="A brick-building sandbox: snap bricks, plates, tiles and slopes onto a baseplate in classic colors.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1b2130; --muted: #636c7e; --line: rgba(27, 33, 48, .1);
+    --panel: rgba(255, 255, 255, .86); --hover: rgba(27, 33, 48, .06);
+    --accent: #1f6feb; --accent-soft: rgba(31, 111, 235, .12); --danger: #d93d42; --brand: #e3262b;
+    --shadow: 0 1px 2px rgba(20, 28, 45, .06), 0 8px 28px rgba(20, 28, 45, .13);
+    --r: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; color: var(--ink);
+    font-family: 'Fredoka', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+    background: radial-gradient(130% 95% at 50% 18%, #fdfdfe 0%, #eaeef3 52%, #d3d9e1 100%);
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none;
+  }
+  [hidden] { display: none !important; }
+  #app { position: fixed; inset: 0; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .glass {
+    background: var(--panel); border: 1px solid rgba(255, 255, 255, .75); border-radius: var(--r); box-shadow: var(--shadow);
+    -webkit-backdrop-filter: blur(12px) saturate(1.3); backdrop-filter: blur(12px) saturate(1.3);
+  }
+  .ibtn { position: relative; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; transition: background .12s; }
+  .ibtn:hover { background: var(--hover); }
+  .ibtn:disabled { opacity: .32; cursor: default; background: none; }
+  .ibtn[data-tip]:hover::after {
+    content: attr(data-tip); position: absolute; z-index: 5; white-space: nowrap; pointer-events: none;
+    background: var(--ink); color: #fff; font-size: 13px; font-weight: 500; padding: 5px 9px; border-radius: 7px;
+  }
+  #tools .ibtn[data-tip]:hover::after { right: calc(100% + 10px); top: 50%; transform: translateY(-50%); }
+  #actions .ibtn[data-tip]:hover::after { top: calc(100% + 8px); right: 0; }
+
+  /* Header */
+  #top { position: absolute; left: 16px; top: 14px; display: flex; align-items: center; gap: 12px; padding: 7px 14px 7px 10px; }
+  #brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 21px; letter-spacing: .01em; }
+  #brand svg { width: 30px; height: 30px; }
+  #count { color: var(--muted); font-size: 14px; padding-left: 12px; border-left: 1px solid var(--line); white-space: nowrap; }
+  #actions { position: absolute; right: 16px; top: 14px; display: flex; gap: 2px; padding: 4px; }
+  #menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 230px; padding: 6px; display: flex; flex-direction: column; z-index: 6; }
+  #menu button { display: flex; align-items: center; gap: 11px; padding: 9px 10px; border-radius: 9px; text-align: left; font-size: 15px; }
+  #menu button:hover { background: var(--accent-soft); }
+  #menu button kbd { margin-left: auto; }
+  #menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+
+  /* Brick and color panel */
+  #panel { position: absolute; left: 16px; top: 76px; bottom: 16px; width: 272px; display: flex; flex-direction: column; overflow: hidden; }
+  #sheetHead { display: none; }
+  .tabs { display: flex; gap: 3px; padding: 10px 10px 6px; }
+  .tabs button { flex: 1; padding: 7px 0; border-radius: 9px; font-size: 14px; font-weight: 500; color: var(--muted); transition: background .12s, color .12s; }
+  .tabs button:hover { background: var(--hover); }
+  .tabs button.on { background: var(--ink); color: #fff; }
+  #catalog { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 10px 10px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; align-content: start; touch-action: pan-y; }
+  .piece { display: flex; flex-direction: column; align-items: center; padding: 4px 2px 6px; border-radius: 11px; border: 1.5px solid transparent; transition: background .12s; }
+  .piece canvas { width: 66px; height: 66px; display: block; }
+  .piece span { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .piece:hover { background: var(--hover); }
+  .piece.on { border-color: var(--accent); background: var(--accent-soft); }
+  .piece.on span { color: var(--accent); font-weight: 600; }
+  #colorHead { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 14px 7px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  #colorName { color: var(--ink); font-weight: 500; font-size: 14px; }
+  #palette { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; padding: 2px 12px 14px; }
+  .sw {
+    position: relative; aspect-ratio: 1; border-radius: 8px; background: var(--c);
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 0 1px rgba(0, 0, 0, .06);
+  }
+  .sw::after {
+    content: ''; position: absolute; inset: 27%; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .5), rgba(255, 255, 255, 0) 62%), var(--c);
+    box-shadow: 0 1px 1.5px rgba(0, 0, 0, .3);
+  }
+  .sw.trans { background: linear-gradient(var(--c), var(--c)), repeating-conic-gradient(#d4d9e0 0 25%, #fff 0 50%) 0 0 / 8px 8px; }
+  .sw.trans::after { background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, .7), rgba(255, 255, 255, 0) 62%), var(--c); }
+  .sw:hover { transform: translateY(-1px); }
+  .sw.on { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+
+  /* Tools */
+  #tools { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; padding: 6px; }
+  #tools .ibtn { width: 46px; height: 46px; }
+  #tools .ibtn.on { background: var(--ink); color: #fff; }
+  #tools .sep { height: 1px; background: var(--line); margin: 4px 6px; }
+
+  /* Selection / carry bar */
+  .bar { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 20px); display: flex; align-items: center; gap: 2px; padding: 5px 5px 5px 14px; white-space: nowrap; }
+  .bar .lbl { font-size: 15px; font-weight: 500; margin-right: 6px; }
+  .bar .lbl small { color: var(--muted); font-size: 13px; font-weight: 400; margin-left: 6px; }
+  .tbtn { display: flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 9px; font-size: 14px; font-weight: 500; transition: background .12s; }
+  .tbtn:hover { background: var(--hover); }
+  .tbtn svg.i { width: 18px; height: 18px; }
+  .tbtn.danger { color: var(--danger); }
+
+  #hint {
+    position: absolute; left: calc(50% + 128px); bottom: 16px; transform: translateX(-50%); max-width: calc(100% - 420px);
+    padding: 7px 14px; border-radius: 999px; background: rgba(255, 255, 255, .78); box-shadow: 0 2px 10px rgba(20, 28, 45, .1);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    color: var(--muted); font-size: 13.5px; text-align: center; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #hint b { color: var(--ink); font-weight: 500; }
+  #toast {
+    position: absolute; left: 50%; bottom: 64px; transform: translate(-50%, 8px); opacity: 0; transition: opacity .2s, transform .2s;
+    background: var(--ink); color: #fff; padding: 9px 16px; border-radius: 999px; font-size: 14px; pointer-events: none; white-space: nowrap; z-index: 30;
+  }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+  #marquee { position: absolute; border: 1.5px solid var(--accent); background: rgba(31, 111, 235, .1); border-radius: 3px; pointer-events: none; }
+  #panelToggle { display: none; }
+
+  /* Dialogs */
+  .modal { position: absolute; inset: 0; background: rgba(20, 26, 38, .38); display: grid; place-items: center; padding: 16px; z-index: 40; }
+  .dlg { width: min(540px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: #fff; border-radius: 18px; padding: 22px 22px 18px; box-shadow: 0 24px 70px rgba(10, 20, 40, .3); touch-action: pan-y; }
+  .dlg h2 { margin: 0 0 4px; font-size: 24px; font-weight: 600; }
+  .dlg h3 { margin: 18px 0 8px; font-size: 14px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .dlg p { margin: 0; color: var(--muted); line-height: 1.45; }
+  .opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .opt { border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 6px; text-align: center; transition: background .12s; }
+  .opt:hover { background: var(--hover); }
+  .opt.on { border-color: var(--accent); background: var(--accent-soft); }
+  .opt b { display: block; font-size: 18px; font-weight: 600; }
+  .opt span { font-size: 13px; color: var(--muted); }
+  .basecols { display: flex; gap: 10px; flex-wrap: wrap; }
+  .basecols .sw { width: 40px; }
+  .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; flex-wrap: wrap; }
+  .btn { padding: 10px 16px; border-radius: 10px; font-weight: 500; font-size: 15px; background: rgba(27, 33, 48, .07); }
+  .btn:hover { background: rgba(27, 33, 48, .12); }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #1a5fd0; }
+  .note { margin-top: 14px !important; font-size: 14px; }
+  kbd {
+    font: 500 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); white-space: nowrap;
+    background: #f2f4f7; border: 1px solid #d9dee5; border-bottom-width: 2px; border-radius: 5px; padding: 0 6px;
+  }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 7px 16px; align-items: baseline; font-size: 15px; }
+  .keys dt { text-align: right; }
+  .keys dd { margin: 0; color: var(--muted); }
+
+  @media (max-width: 760px) {
+    #top { left: 10px; top: 10px; padding: 5px 10px 5px 7px; gap: 8px; }
+    #brand { font-size: 18px; }
+    #brand svg { width: 26px; height: 26px; }
+    #actions { right: 10px; top: 10px; }
+    #panel {
+      left: 0; right: 0; bottom: 0; top: auto; width: auto; height: min(62vh, 480px); z-index: 12;
+      border-radius: 18px 18px 0 0; transform: translateY(105%); transition: transform .25s ease;
+    }
+    body.sheet #panel { transform: none; }
+    #sheetHead { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 0 16px; font-weight: 600; font-size: 17px; }
+    #panel { background: rgba(255, 255, 255, .97); }
+    #catalog { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
+    #palette { display: flex; gap: 8px; overflow-x: auto; touch-action: pan-x; padding: 4px 14px max(14px, env(safe-area-inset-bottom)); scrollbar-width: none; }
+    #palette::-webkit-scrollbar { display: none; }
+    #palette .sw { width: 40px; flex: none; }
+    #panelToggle {
+      position: absolute; left: 10px; bottom: max(10px, env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 8px;
+      padding: 5px 14px 5px 5px; font-size: 15px; font-weight: 500;
+    }
+    #panelToggle canvas { width: 44px; height: 44px; }
+    #tools { right: 10px; }
+    #tools .ibtn { width: 44px; height: 44px; }
+    #hint { display: none; }
+    .bar { top: 62px; flex-wrap: wrap; justify-content: center; padding: 5px; }
+    .bar .lbl { width: 100%; text-align: center; margin: 3px 0 2px; }
+    .tbtn { flex-direction: column; gap: 2px; padding: 6px 8px; font-size: 12px; min-width: 58px; }
+    .tbtn svg.i { width: 20px; height: 20px; }
+    .ibtn[data-tip]:hover::after { display: none; }
+  }
+  @media (max-width: 420px) { #count { display: none; } }
+</style>
+<div id="app">
+  <canvas id="c" tabindex="0"></canvas>
+  <div id="marquee" hidden></div>
+
+  <header id="top" class="glass">
+    <div id="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="2.5" y="12" width="27" height="16" rx="3" fill="#e3262b"/>
+        <rect x="2.5" y="24" width="27" height="4" rx="2" fill="#b81c20"/>
+        <rect x="6" y="6.5" width="8" height="7" rx="2.2" fill="#e3262b"/>
+        <rect x="18" y="6.5" width="8" height="7" rx="2.2" fill="#e3262b"/>
+        <rect x="7.5" y="7.5" width="3" height="2" rx="1" fill="#ff8a7a"/>
+        <rect x="19.5" y="7.5" width="3" height="2" rx="1" fill="#ff8a7a"/>
+      </svg>
+      <span>Studworks</span>
+    </div>
+    <div id="count">0 bricks</div>
+  </header>
+
+  <div id="actions" class="glass">
+    <button class="ibtn" id="undoBtn" aria-label="Undo"></button>
+    <button class="ibtn" id="redoBtn" aria-label="Redo"></button>
+    <button class="ibtn" id="soundBtn" aria-label="Sound"></button>
+    <button class="ibtn" id="menuBtn" aria-label="Menu" aria-haspopup="true"></button>
+    <div id="menu" class="glass" hidden></div>
+  </div>
+
+  <aside id="panel" class="glass">
+    <div id="sheetHead"><span>Bricks &amp; colors</span><button class="ibtn" id="sheetClose" aria-label="Close"></button></div>
+    <div class="tabs" id="famTabs"></div>
+    <div id="catalog"></div>
+    <div id="colorHead"><span>Color</span><span id="colorName"></span></div>
+    <div id="palette"></div>
+  </aside>
+  <button id="panelToggle" class="glass"><canvas width="88" height="88"></canvas><span>Bricks</span></button>
+
+  <nav id="tools" class="glass"></nav>
+
+  <div id="selbar" class="bar glass" hidden></div>
+  <div id="carrybar" class="bar glass" hidden></div>
+  <div id="hint"></div>
+  <div id="toast"></div>
+
+  <div class="modal" id="newDlg" hidden>
+    <div class="dlg" role="dialog" aria-labelledby="newTitle">
+      <h2 id="newTitle">Baseplate</h2>
+      <p>Pick a size and color. Start a fresh build, or resize the one you have.</p>
+      <h3>Size</h3>
+      <div class="opts" id="sizeOpts"></div>
+      <h3>Color</h3>
+      <div class="basecols" id="baseOpts"></div>
+      <p class="note" id="newNote"></p>
+      <div class="row">
+        <button class="btn" data-close>Cancel</button>
+        <button class="btn" id="applyBase">Apply to this build</button>
+        <button class="btn primary" id="freshBase">Start new build</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="helpDlg" hidden>
+    <div class="dlg" role="dialog" aria-labelledby="helpTitle">
+      <h2 id="helpTitle">Welcome to Studworks</h2>
+      <p id="helpLede">Pick a brick and a color on the left, then build on the baseplate. Your build saves itself in this browser.</p>
+      <div id="helpKeys"></div>
+      <div class="row"><button class="btn primary" data-close>Start building</button></div>
+    </div>
+  </div>
+
+  <input type="file" id="fileIn" accept=".json,application/json" hidden>
+</div>
