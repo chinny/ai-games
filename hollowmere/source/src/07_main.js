@@ -197,7 +197,7 @@ function closeNote() {
     $('#obj').textContent = 'Leave by the coach road — or ring the church bell.';
     say('Leave by the coach road, or ring the church bell.', 6);
   }
-  if (!isTouch && !locked) pause();
+  if (!isTouch && !locked && location.hash !== '#debug') pause();
 }
 
 let sayTimer = 0;
@@ -326,7 +326,7 @@ $('#note').addEventListener('mousedown', () => { if (!isTouch) closeNote(); });
 $('#pause').addEventListener('mousedown', resume);
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
-  if (!locked && state === 'play') pause();
+  if (!locked && state === 'play' && location.hash !== '#debug') pause();
 });
 $('#start').addEventListener('click', start);
 $('#retry').addEventListener('click', retry);
@@ -406,4 +406,4 @@ setState('title');
 requestAnimationFrame(frame);
 
 // Test hook: open the page with #debug to drive the game from the console.
-if (location.hash === '#debug') window.HM = { P, M, U, LT, inter, found, boxes, circles, pointBlocked, inBounds, start, openNote, closeNote, strike, teleportMonster, caught, ending, get state() { return state; }, get fear() { return fear; } };
+if (location.hash === '#debug') window.HM = { P, M, U, LT, inter, found, boxes, circles, pointBlocked, inBounds, hand, rain, scene, renderer, camera, start, openNote, closeNote, strike, teleportMonster, caught, ending, get state() { return state; }, get fear() { return fear; } };
