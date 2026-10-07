@@ -1,0 +1,107 @@
+<title>Hollowmere</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #d8cfbd; --dim: #8d8574; --blood: #8a1c14; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: var(--ink);
+    font-family: 'VT323', ui-monospace, monospace; -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent; touch-action: none; }
+  [hidden] { display: none !important; }
+  #app { position: fixed; inset: 0; cursor: default; }
+  #c, #static { position: absolute; inset: 0; width: 100%; height: 100%;
+    image-rendering: crisp-edges; image-rendering: pixelated; }
+  #static { opacity: 0; mix-blend-mode: screen; pointer-events: none; }
+  #scan { position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,.18) 0 1px, transparent 1px 4px);
+    box-shadow: inset 0 0 18vmin 6vmin rgba(0,0,0,.85); }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 3s ease; }
+  #fade.white { background: #fff; transition: opacity .15s; }
+
+  /* HUD */
+  #hud { position: absolute; inset: 0; pointer-events: none; display: none; }
+  body[data-state="play"] #hud, body[data-state="note"] #hud { display: block; }
+  #pages { position: absolute; left: 20px; top: 14px; font-size: 26px; letter-spacing: 2px; color: var(--ink); opacity: .75; text-shadow: 2px 2px 0 #000; }
+  #obj { position: absolute; left: 20px; top: 42px; font-size: 20px; color: var(--dim); text-shadow: 2px 2px 0 #000; max-width: 60vw; }
+  #dot { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1px; background: rgba(216,207,189,.5); }
+  #prompt { position: absolute; left: 0; right: 0; top: 58%; text-align: center; font-size: 26px; text-shadow: 2px 2px 0 #000; }
+  #msg { position: absolute; left: 10%; right: 10%; bottom: 16%; text-align: center; font-family: 'IM Fell English', Georgia, serif;
+    font-style: italic; font-size: clamp(18px, 2.6vw, 28px); text-shadow: 2px 2px 0 #000; opacity: 0; transition: opacity 1.2s; }
+  #msg.on { opacity: 1; transition: opacity .3s; }
+  #stam { position: absolute; left: 50%; bottom: 26px; width: 120px; height: 4px; margin-left: -60px; background: rgba(0,0,0,.5); opacity: 0; transition: opacity .5s; }
+  #stam i { display: block; height: 100%; width: 100%; background: var(--dim); }
+  #intro { position: absolute; left: 8%; right: 8%; top: 30%; text-align: center; font-family: 'IM Fell English', Georgia, serif;
+    font-size: clamp(18px, 2.8vw, 30px); line-height: 1.5; text-shadow: 2px 2px 0 #000; opacity: 0; transition: opacity 2.5s; pointer-events: none; }
+  #intro.on { opacity: 1; }
+
+  /* Screens */
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; box-sizing: border-box; }
+  #title { background: radial-gradient(ellipse at center, rgba(0,0,0,.15), rgba(0,0,0,.75)); }
+  #title h1 { font-family: 'IM Fell English', Georgia, serif; font-weight: 400; font-size: clamp(44px, 10vw, 120px); letter-spacing: .12em; margin: 0;
+    color: #c9c1ad; text-shadow: 0 0 18px rgba(0,0,0,.9), 3px 3px 0 var(--blood); }
+  #title .sub { font-size: clamp(18px, 2.4vw, 26px); color: var(--dim); letter-spacing: .5em; margin: 6px 0 40px; }
+  button.ps { font: inherit; font-size: clamp(24px, 3.4vw, 34px); letter-spacing: .25em; color: var(--ink); background: none; border: 0; cursor: pointer; padding: 10px 24px; }
+  button.ps:hover, button.ps:focus-visible { color: #fff; outline: none; text-shadow: 0 0 8px rgba(255,220,160,.6); }
+  #start { animation: blink 1.4s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .help { margin-top: 36px; font-size: 20px; color: var(--dim); line-height: 1.4; }
+  .warn { margin-top: 14px; font-size: 17px; color: #6e665a; }
+  #pause { background: rgba(0,0,0,.6); font-size: 40px; letter-spacing: .3em; }
+  #pause span { display: block; font-size: 20px; letter-spacing: .1em; color: var(--dim); margin-top: 8px; }
+  #dead { background: #000; }
+  #dead h2 { font-family: 'IM Fell English', Georgia, serif; font-weight: 400; font-size: clamp(36px, 7vw, 76px); color: var(--blood); margin: 0 0 12px; letter-spacing: .08em; }
+  #dead p { font-size: 22px; color: var(--dim); margin: 0 0 28px; }
+  #ending { background: #000; }
+  #ending .inner { max-width: 640px; }
+  #endtext { font-family: 'IM Fell English', Georgia, serif; font-size: clamp(18px, 2.4vw, 25px); line-height: 1.6; color: var(--ink); opacity: 0; transition: opacity 3s; }
+  #endtext.on { opacity: 1; }
+  #endtext em { display: block; margin-top: 26px; color: var(--dim); font-size: .85em; }
+
+  /* Note */
+  #note { background: rgba(0,0,0,.55); }
+  .paper { max-width: 560px; width: 100%; box-sizing: border-box; padding: 30px 34px 22px; text-align: left; color: #2b2118;
+    background: linear-gradient(170deg, #d9ceb0, #c8b991 60%, #b9a77c); box-shadow: 0 0 0 4px #1a140e, 8px 8px 0 rgba(0,0,0,.6);
+    font-family: 'IM Fell English', Georgia, serif; transform: rotate(-.6deg); }
+  .paper h3 { margin: 0 0 14px; font-weight: 400; font-size: 15px; letter-spacing: .2em; text-transform: uppercase; color: #5b4630; }
+  .paper p { margin: 0 0 12px; font-size: clamp(17px, 2.2vw, 21px); line-height: 1.5; white-space: pre-line; }
+  .paper small { display: block; margin-top: 16px; font-family: 'VT323', monospace; font-size: 18px; color: #6d5a40; }
+
+  /* Touch */
+  #touch { position: absolute; inset: 0; pointer-events: none; display: none; }
+  body.touch[data-state="play"] #touch { display: block; }
+  #joy { position: absolute; width: 110px; height: 110px; margin: -55px; border: 2px solid rgba(216,207,189,.25); border-radius: 50%; display: none; }
+  #joy i { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px; border-radius: 50%; background: rgba(216,207,189,.25); }
+  #touch button { pointer-events: auto; position: absolute; font: inherit; font-size: 22px; letter-spacing: .1em; color: var(--ink); background: rgba(0,0,0,.35);
+    border: 2px solid rgba(216,207,189,.35); width: 84px; height: 84px; border-radius: 50%; }
+  #tRead { right: 28px; bottom: 120px; }
+  #tRun { right: 124px; bottom: 36px; }
+  #tRun.on { background: rgba(138,28,20,.5); }
+  @media (max-width: 600px) { #pages { font-size: 22px; } #obj { font-size: 17px; } }
+</style>
+<div id="app">
+  <canvas id="c"></canvas>
+  <canvas id="static" width="160" height="120"></canvas>
+  <div id="scan"></div>
+  <div id="hud">
+    <div id="pages">PAGES 0/8</div>
+    <div id="obj">Find out what happened to Hollowmere.</div>
+    <div id="dot"></div>
+    <div id="prompt"></div>
+    <div id="msg"></div>
+    <div id="stam"><i></i></div>
+  </div>
+  <div id="intro"></div>
+  <div id="touch"><div id="joy"><i></i></div><button id="tRead">READ</button><button id="tRun">RUN</button></div>
+  <div id="note" class="screen" hidden><div class="paper"><h3 id="noteTitle"></h3><p id="noteBody"></p><small id="noteHint">E / click to put it down</small></div></div>
+  <div id="title" class="screen">
+    <h1>HOLLOWMERE</h1>
+    <div class="sub">1888</div>
+    <button id="start" class="ps">PRESS START</button>
+    <div class="help" id="help">WASD move · Mouse look · Shift run · E read<br>Find the eight pages. Don't look at him for long.</div>
+    <div class="warn">Headphones recommended · Contains jump scares and flashing lights</div>
+  </div>
+  <div id="pause" class="screen" hidden>PAUSED<span>click to resume</span></div>
+  <div id="dead" class="screen" hidden><h2>YOU WERE TAKEN</h2><p id="deadText"></p><button id="retry" class="ps">TRY AGAIN</button></div>
+  <div id="ending" class="screen" hidden><div class="inner"><p id="endtext"></p><button id="again" class="ps" hidden>PLAY AGAIN</button></div></div>
+  <div id="fade"></div>
+</div>
