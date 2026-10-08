@@ -328,6 +328,19 @@ function buildDungeonDoor(color) {
   for (const s of [-1, 1]) mk(gBox(0.3, 5.4, 0.3), glowMat(color), g, s * 2.2, 2.7, 3.2);
   mk(gBox(4.6, 0.3, 0.3), glowMat(color), g, 0, 5.3, 3.2); return g;
 }
+// Glim models are ~0.12m across; userData.core is the glowing part (own material so it can dim), userData.anim(t) animates it
+function buildGlim(it) {
+  const g = new THREE.Group(), dark = toon(0x262a32), core = new THREE.MeshBasicMaterial({ color: it.col }), spin = [];
+  if (it.style === 'orb') { mk(gSph(0.04, 1), core, g); mk(gTorus(0.062, 0.012, 4, 16), dark, g, 0, 0, 0, Math.PI / 2, 0, 0); mk(gCyl(0.004, 0.004, 0.05, 4), dark, g, 0, 0.06, 0); spin.push([g, 0, 0.6, 0]); }
+  else if (it.style === 'lantern') { mk(gCyl(0.035, 0.035, 0.07, 6), core, g); mk(gCone(0.05, 0.035, 6), dark, g, 0, 0.052, 0); mk(gCyl(0.045, 0.03, 0.015, 6), dark, g, 0, -0.042, 0); mk(gTorus(0.02, 0.004, 4, 10), dark, g, 0, 0.085, 0); for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; mk(gBox(0.006, 0.07, 0.006), dark, g, Math.cos(a) * 0.036, 0, Math.sin(a) * 0.036); } }
+  else if (it.style === 'halo') { mk(gSph(0.03, 1), core, g); for (let i = 0; i < 2; i++) { const p = piv(g); mk(gTorus(0.07 - i * 0.015, 0.006, 4, 20), core, p); spin.push([p, 1.3 - i * 0.4, 0.7 + i, 0]); } mk(gBox(0.03, 0.03, 0.03), dark, g, 0, -0.05, 0, 0.6, 0.6, 0); }
+  else if (it.style === 'drone') { mk(gBox(0.07, 0.022, 0.07), dark, g); mk(gCyl(0.022, 0.026, 0.012, 8), core, g, 0, -0.016, 0); for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + Math.PI / 4, x = Math.cos(a) * 0.065, z = Math.sin(a) * 0.065; mk(gBox(0.06, 0.008, 0.01), dark, g, x / 2, 0, z / 2, 0, -a, 0); const r = piv(g, x, 0.014, z); mk(gBox(0.055, 0.003, 0.008), toon(0x8a96a8), r); spin.push([r, 0, 40 + i, 0]); } }
+  else if (it.style === 'prism') { const p = piv(g); mk(new THREE.OctahedronGeometry(0.045, 0), core, p, 0, 0, 0, 0, 0, 0, 1, 1.5, 1); spin.push([p, 0, 1.2, 0]); const o = piv(g); for (let i = 0; i < 3; i++) { const a = i / 3 * TAU; mk(new THREE.OctahedronGeometry(0.012, 0), core, o, Math.cos(a) * 0.075, 0, Math.sin(a) * 0.075); } spin.push([o, 0.3, -2, 0]); }
+  else { mk(gSph(0.032, 1), core, g); mk(gSph(0.055, 1), new THREE.MeshBasicMaterial({ color: it.col, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }), g); const o = piv(g); for (let i = 0; i < 4; i++) { const a = i / 4 * TAU; mk(gSph(0.008, 0), core, o, Math.cos(a) * 0.08, Math.sin(a * 2) * 0.02, Math.sin(a) * 0.08); } spin.push([o, 0.5, 1.6, 0.2]); }
+  g.userData.core = core;
+  g.userData.anim = (t) => { for (const [o, x, y, z] of spin) o.rotation.set(t * x, t * y, t * z); if (it.style === 'lantern') g.rotation.z = Math.sin(t * 2.2) * 0.18; };
+  return g;
+}
 function buildCrystalCluster(color) {
   const g = new THREE.Group(); const m = glowMat(color); const m2 = toon(new THREE.Color(color).multiplyScalar(0.6).getHex());
   for (let i = 0; i < 5; i++) { const h = 1 + rnd() * 2.5; mk(gCone(0.3 + rnd() * 0.3, h, 5), i % 2 ? m : m2, g, rr(rnd, -0.8, 0.8), h / 2, rr(rnd, -0.8, 0.8), rr(rnd, -0.4, 0.4), 0, rr(rnd, -0.4, 0.4)); }

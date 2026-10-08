@@ -81,6 +81,48 @@ const VM = {
   }
 };
 
+// ---------- Glim: the light device floating over the player's shoulder ----------
+const Glim = {
+  root: null, model: null, uid: null, light: null, vmLight: null, lvl: 0, t: 0, sx: 0, sy: 0, sz: 0, lastYaw: 0, lastPitch: 0, off: new THREE.Vector3(), col: new THREE.Color(), cast: new THREE.Color(),
+  init() {
+    this.root = new THREE.Group(); scene.add(this.root);
+    this.light = new THREE.PointLight(0xffffff, 0, 16, 2); scene.add(this.light);
+    this.vmLight = new THREE.PointLight(0xffffff, 0, 2.5, 2); this.vmLight.position.set(0.55, 0.45, -0.2); vmCamera.add(this.vmLight);
+  },
+  set(it) {
+    if ((it ? it.uid : null) === this.uid) return;
+    if (this.model) { this.root.remove(this.model); this.model.userData.core.dispose(); }
+    this.model = it ? buildGlim(it) : null; if (this.model) this.root.add(this.model); this.uid = it ? it.uid : null;
+  },
+  update(dt) {
+    const it = P.glimItem, show = Game.state === 'play' && !!it && !P.dead;
+    this.root.visible = show && !(P.adsT > 0.5 && P.gun() && P.gun().kind === 'sniper');
+    if (!show) { this.light.intensity = this.vmLight.intensity = 0; return; }
+    this.set(it); this.t += dt; const t = this.t;
+    // lags behind turning and movement, then settles at the top-right edge of view
+    const dy = Math.atan2(Math.sin(P.yaw - this.lastYaw), Math.cos(P.yaw - this.lastYaw)), dp = P.pitch - this.lastPitch; this.lastYaw = P.yaw; this.lastPitch = P.pitch;
+    const fwd = -(P.vel.x * Math.sin(P.yaw) + P.vel.z * Math.cos(P.yaw)), k = Math.min(1, dt * 6);
+    this.sx = lerp(this.sx, clamp(dy * 3, -0.18, 0.18), k); this.sy = lerp(this.sy, clamp(-dp * 3 - P.vel.y * 0.01, -0.12, 0.12), k); this.sz = lerp(this.sz, clamp(fwd * 0.02, -0.12, 0.2), k);
+    const ads = clamp(P.adsT * 2, 0, 1);
+    this.off.set(0.62 + this.sx + ads * 0.35, 0.42 + this.sy + Math.sin(t * 2.1) * 0.025 + ads * 0.2, -0.75 + this.sz).applyQuaternion(camera.quaternion);
+    this.root.position.copy(camera.position).add(this.off); this.root.quaternion.copy(camera.quaternion);
+    if (this.model) this.model.userData.anim(t);
+    // switches itself on after dark and underground; T (or the inventory) turns it off
+    const dark = zone.k === 'dungeon' ? 1 : zone.lampsOn; this.lvl = lerp(this.lvl, P.glimOn ? dark : 0, Math.min(1, dt * 3));
+    const G = GLIM_STYLES[it.style]; this.col.set(it.col); if (G.cycle) this.col.offsetHSL((t * 0.05) % 1, 0, 0);
+    const fl = G.flicker ? 1 - G.flicker * Math.max(0, Math.sin(t * 13) * Math.sin(t * 4.7)) : 1;
+    if (this.model) this.model.userData.core.color.copy(this.col).multiplyScalar(0.45 + 0.55 * Math.max(this.lvl, zone.k === 'dungeon' ? 1 : 1 - zone.lampsOn));
+    // the device shows its full colour; the light it throws is mostly white with a tint, so the world stays readable
+    this.cast.copy(this.col).lerp(_white, 0.55);
+    this.light.position.copy(this.root.position); this.light.color.copy(this.cast); this.light.distance = it.reach; this.light.intensity = it.bright * 0.95 * this.lvl * fl;
+    this.vmLight.color.copy(this.cast); this.vmLight.intensity = 0.5 * this.lvl * fl;
+  },
+  lit(e) { const it = P.glimItem; return it && this.lvl > 0.3 && e.pos.distanceTo(P.pos) < it.reach; },
+  toggle() { P.glimOn = !P.glimOn; Sfx.play('ui'); UI.feed(P.glimOn ? 'Glim on' : 'Glim off', P.glimOn ? '#ffe9a8' : '#8fa3b4'); UI.dirty = true; }
+};
+const _white = new THREE.Color(0xffffff);
+const equippedFor = (it) => !it ? null : it.type === 'gun' ? P.gun() : it.type === 'glim' ? P.glimItem : P.shieldItem;
+
 // ===================== PLAYER =====================
 const xpNeed = (L) => Math.round(80 * Math.pow(L, 1.35) + 40);
 const P = {
@@ -96,12 +138,12 @@ const P = {
     const mf = faction === 'corp' ? 'cyrex' : faction === 'clan' ? 'clanforge' : 'dustline';
     const kit = { soldier: ['rifle', 'pistol'], nanocaster: ['smg', 'pistol'], engineer: ['shotgun', 'pistol'], agent: ['sniper', 'pistol'], doctor: ['smg', 'pistol'] }[prof];
     this.weapons[0] = makeGun(1, 1, kit[0], prof === 'nanocaster' ? 'nanodyne' : MFG[mf].kinds.includes(kit[0]) ? mf : undefined); this.weapons[1] = makeGun(1, 0, kit[1], mf);
-    this.shieldItem = makeShield(1, 0); this.weapons.forEach(w => w && (w.cur = w.mag));
+    this.shieldItem = makeShield(1, 0); this.glimItem = makeGlim(1, 0, 'orb'); this.glimOn = true; this.weapons.forEach(w => w && (w.cur = w.mag));
     this.resetRuntime(); this.recalc(); this.hp = this.maxHp; this.sh = this.maxSh; this.nano = this.maxNano;
   },
   resetRuntime() { Object.assign(this, { fireCd: 0, reloadT: 0, reloadMax: 1, bloom: 0, adsT: 0, sprint: false, skillCd: 0, overdrive: 0, cloak: 0, cloakCrit: false, regenField: 0, downed: false, downT: 0, dead: false, hurtT: 0, shake: 0, recoil: 0, shDelayT: 0, calmT: 0, meleeCd: 0, godT: 0, booth: null, inWater: false, moving: false, regenT: 0 }); this.vel.set(0, 0, 0); },
-  serialize() { const s = {}; for (const k of ['name', 'faction', 'prof', 'level', 'xp', 'credits', 'attrs', 'pts', 'weapons', 'cur', 'pack', 'packMax', 'ammo', 'grenades', 'discovered', 'quest', 'mission', 'missionsDone', 'kills', 'bosses', 'zone', 'reclaim', 'shieldItem', 'offers', 'playTime', 'finished']) s[k] = this[k]; s.hp = this.hp; s.sh = this.sh; return JSON.parse(JSON.stringify(s)); },
-  load(s) { Object.assign(this, s); if (!this.discovered.includes('jovan')) this.discovered.push('jovan'); this.resetRuntime(); this.recalc(); this.hp = clamp(s.hp || this.maxHp, 1, this.maxHp); this.sh = this.maxSh; this.nano = this.maxNano; },
+  serialize() { const s = {}; for (const k of ['name', 'faction', 'prof', 'level', 'xp', 'credits', 'attrs', 'pts', 'weapons', 'cur', 'pack', 'packMax', 'ammo', 'grenades', 'discovered', 'quest', 'mission', 'missionsDone', 'kills', 'bosses', 'zone', 'reclaim', 'shieldItem', 'glimItem', 'glimOn', 'offers', 'playTime', 'finished']) s[k] = this[k]; s.hp = this.hp; s.sh = this.sh; return JSON.parse(JSON.stringify(s)); },
+  load(s) { Object.assign(this, s); if (!this.discovered.includes('jovan')) this.discovered.push('jovan'); if (!this.glimItem && !this.pack.some(p => p.type === 'glim')) this.glimItem = makeGlim(1, 0, 'orb'); if (this.glimOn === undefined) this.glimOn = true; this.resetRuntime(); this.recalc(); this.hp = clamp(s.hp || this.maxHp, 1, this.maxHp); this.sh = this.maxSh; this.nano = this.maxNano; },
   recalc() {
     const pr = PROFESSIONS[this.prof], A = this.attrs;
     this.maxHp = 100 * S(this.level) * (1 + A.sta * 0.03 + A.str * 0.02) * (pr.hp || 1);
@@ -254,6 +296,7 @@ const P = {
     for (let i = 0; i < 4; i++) if (pr2.has('Digit' + (i + 1))) this.setWeapon(i);
     if (Input.wheel) { this.cycleWeapon(Input.wheel > 0 ? 1 : -1); Input.wheel = 0; }
     if (pr2.has('KeyE')) Game.interact();
+    if (pr2.has('KeyT') && this.glimItem) Glim.toggle();
     // movement
     const sp = 8.2 * this.spdMul * (this.sprint ? 1.55 : 1) * (this.adsT > 0.5 ? 0.6 : 1) * (this.downed ? 0.22 : 1) * (this.inWater ? 0.65 : 1) * (this.overdrive > 0 ? 1.1 : 1);
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw), rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
@@ -299,6 +342,7 @@ function dealDamage(e, base, el, crit, point, o = {}) {
   if (el !== 'kinetic') dmg *= P.elMul;
   if (P.overdrive > 0) dmg *= 1.25;
   if (P.shieldItem && P.shieldItem.fx === 'amp' && P.sh >= P.maxSh * 0.99) dmg *= 1.2;
+  if (P.glimItem && P.glimItem.fx === 'expose' && Glim.lit(e)) dmg *= 1.1;
   const wasDead = e.dead; const dealt = e.hurt(dmg, el, crit, point, o);
   if (!o.noProc && el !== 'kinetic' && o.src && !e.dead) { const ch = (o.src.elc || 0) * (1 + P.elChance); if (rnd() < ch * (o.splash ? 0.6 : 1)) proc(e, el, base * (crit ? 1.5 : 1)); }
   if (o.src && o.src.leg === 'leech') P.heal(dealt * 0.06);
