@@ -41,6 +41,7 @@ const UI = {
   },
   update(dt) {
     if (Game.state !== 'play') return;
+    const zt = $('zoneTime'), tl = zone.day ? DayClock.label() : ''; if (zt.textContent !== tl) zt.textContent = tl;
     const w = (el, f) => { el.style.width = (clamp(f, 0, 1) * 100).toFixed(1) + '%'; };
     const sh = $('bSh'), hp = $('bHp');
     w(sh.firstElementChild, P.maxSh ? P.sh / P.maxSh : 0); sh.lastElementChild.textContent = fmt(P.sh);
@@ -201,6 +202,7 @@ const UI = {
       <div class="set"><label for="sSens">Look sensitivity</label><input type="range" id="sSens" min="0.2" max="3" step="0.05" value="${SENS.v}"><output>${SENS.v.toFixed(2)}</output></div>
       <div class="set"><label for="sFov">Field of view</label><input type="range" id="sFov" min="60" max="100" step="1" value="${GFX.fov}"><output>${GFX.fov}</output></div>
       <div class="set"><label for="sQ">Render quality</label><input type="range" id="sQ" min="0" max="2" step="1" value="${GFX.quality}"><output>${QUALITY[GFX.quality].name}</output></div>
+      <div class="set"><label for="sDay">Day length</label><input type="range" id="sDay" min="0" max="${DAY_LENS.length - 1}" step="1" value="${DayClock.len}"><output>${DAY_LENS[DayClock.len].name}</output></div>
       <div class="set"><label for="sInv">Invert look</label><input type="checkbox" id="sInv" ${SENS.invert ? 'checked' : ''}><output></output></div>
       </div><div><h3>Controls</h3><div class="keys">${[['Move', 'WASD'], ['Look', 'Mouse'], ['Fire', 'LMB'], ['Aim down sights', 'RMB'], ['Jump', 'Space'], ['Sprint', 'Shift'], ['Reload', 'R'], ['Profession skill', 'Q'], ['Grenade', 'G'], ['Melee', 'V'], ['Interact / pick up', 'E'], ['Weapons', '1-4 / Wheel'], ['Inventory', 'Tab / I'], ['Atlas', 'M'], ['Menu', 'Esc / P']].map(([a, b]) => `<div><span>${a}</span><kbd>${b}</kbd></div>`).join('')}</div>
       <p style="font-size:12px;color:var(--dim);line-height:1.5;margin-top:12px">On touch screens: drag the left side to move (push to the top edge to sprint), drag the right side to look, and use the on-screen buttons. Progress saves automatically in this browser.</p>
@@ -211,6 +213,7 @@ const UI = {
     if (t.id === 'sVol') { Sfx.setVol(v); out.textContent = Math.round(v * 100); } else if (t.id === 'sMus') { Sfx.setMusic(v); out.textContent = Math.round(v * 100); }
     else if (t.id === 'sSens') { SENS.v = v; Store.set('sens', v); out.textContent = v.toFixed(2); } else if (t.id === 'sFov') { GFX.fov = v; Store.set('fov', v); camera.fov = v; camera.updateProjectionMatrix(); out.textContent = v; }
     else if (t.id === 'sQ') { GFX.quality = v; Store.set('quality', v); onResize(); out.textContent = QUALITY[v].name; } else if (t.id === 'sInv') { SENS.invert = v; Store.set('invert', v); }
+    else if (t.id === 'sDay') { DayClock.setLen(v); out.textContent = DAY_LENS[v].name; }
   },
   onPanelClick(e) {
     const r = e.target.closest('[data-w],[data-p],[data-s],[data-b]'); const a = e.target.closest('[data-act]');

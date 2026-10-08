@@ -63,7 +63,8 @@ button { font-family: var(--f-ui); }
 #hud > * { position: absolute; }
 #zoneTag { top: calc(12px + env(safe-area-inset-top, 0px)); left: 16px; }
 #zoneName { font-family: var(--f-display); font-size: 18px; letter-spacing: .04em; text-shadow: 2px 2px 0 #000; }
-#zoneSub { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); text-shadow: 1px 1px 0 #000; }
+#zoneSub, #zoneTime { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); text-shadow: 1px 1px 0 #000; }
+#zoneTime { margin-left: 10px; color: var(--cyan); white-space: nowrap; }
 #credits { top: calc(54px + env(safe-area-inset-top, 0px)); left: 16px; font-weight: 700; color: #f2c230; font-size: 14px; text-shadow: 1px 1px 0 #000; font-variant-numeric: tabular-nums; }
 #compass { top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; width: min(520px, 46vw); height: 30px; transform: translateX(-50%); overflow: hidden; border-bottom: 2px solid rgba(79,214,255,.5); background: linear-gradient(90deg, transparent, rgba(5,14,24,.55) 20%, rgba(5,14,24,.55) 80%, transparent); }
 #compass .cm { position: absolute; top: 2px; transform: translateX(-50%); font-size: 11px; font-weight: 700; white-space: nowrap; text-shadow: 1px 1px 0 #000; }
@@ -269,7 +270,7 @@ body.touch #quest { top: calc(92px + env(safe-area-inset-top, 0px)); }
 <div id="app">
   <div id="game"></div>
   <div id="hud" hidden>
-    <div id="zoneTag"><div id="zoneName"></div><div id="zoneSub"></div></div>
+    <div id="zoneTag"><div><span id="zoneName"></span><span id="zoneTime"></span></div><div id="zoneSub"></div></div>
     <div id="credits"></div>
     <div id="compass"><div id="compassMarks"></div><div id="compassNeedle"></div></div>
     <div id="quest"></div>
