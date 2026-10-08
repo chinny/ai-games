@@ -133,7 +133,7 @@ const Game = {
       this.save();
     }
   },
-  save() { if (this.state === 'play' || this.state === 'loading') { try { Store.set('save', P.serialize()); } catch (e) { } } },
+  save() { DayClock.save(); if (this.state === 'play' || this.state === 'loading') { try { Store.set('save', P.serialize()); } catch (e) { } } },
   checkTriggers(dt) {
     this.gateLock -= dt; if (this.gateLock > 0) return;
     for (const t of zone.triggers) if (Math.hypot(t.x - P.pos.x, t.z - P.pos.z) < t.r && Math.abs(zone.heightAt(t.x, t.z) - P.pos.y) < 4) { this.gateLock = 3; this.travel(t.to, zone.id); return; }
@@ -142,11 +142,11 @@ const Game = {
     requestAnimationFrame(() => this.loop());
     const dt = Math.min(this.clock.getDelta(), 0.05); this.t += dt; const t = this.t;
     if (this.state === 'title') {
-      this.titleT += dt; const a = this.titleT * 0.05; const R = zone.k === 'wild' ? 60 : 85; camera.position.set(Math.cos(a) * R, 26 + Math.sin(a * 0.7) * 6, Math.sin(a) * R); camera.lookAt(0, 8, 0);
+      this.titleT += dt; DayClock.update(dt); const a = this.titleT * 0.05; const R = zone.k === 'wild' ? 60 : 85; camera.position.set(Math.cos(a) * R, 26 + Math.sin(a * 0.7) * 6, Math.sin(a) * R); camera.lookAt(0, 8, 0);
       for (const c of civs) c.update(dt); for (const e of enemies) if (!e.gone && !e.hostile) e.update(dt);
     } else if (this.state === 'play') {
       if (!this.panel) {
-        P.update(dt); if (!P.dead) this.checkTriggers(dt);
+        P.update(dt); DayClock.update(dt); if (!P.dead) this.checkTriggers(dt);
         for (let i = enemies.length - 1; i >= 0; i--) { const e = enemies[i]; e.update(dt); if (e.gone) enemies.splice(i, 1); }
         for (const c of civs) c.update(dt);
         updateProjs(dt); updatePickups(dt); if (sentry) sentry.update(dt);
@@ -166,4 +166,4 @@ const Game = {
 window.addEventListener('beforeunload', () => Game.save());
 document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(); });
 Game.boot();
-window.__vy = { Game, P, get zone() { return zone; }, enemies, pickups, ZONES, Zone, UI, get renderer() { return renderer; }, GFX, Input, makeGun, makeShield, dropPickup };
+window.__vy = { Game, P, DayClock, get zone() { return zone; }, enemies, pickups, ZONES, Zone, UI, get renderer() { return renderer; }, GFX, Input, makeGun, makeShield, dropPickup };

@@ -2,6 +2,24 @@
 let zone = null;
 const GRID_G = 16;
 
+// ---------- accelerated day/night ----------
+// t is the fraction of a day: 0 midnight, 0.25 sunrise, 0.5 noon, 0.75 sunset. Shared by every zone and kept across sessions.
+const DAY_LENS = [{ s: 0, name: 'Off' }, { s: 1440, name: '24 min' }, { s: 720, name: '12 min' }, { s: 360, name: '6 min' }, { s: 120, name: '2 min' }];
+const DayClock = {
+  t: Store.get('dayT', 0.3), len: clamp(Store.get('dayLen', 2), 0, DAY_LENS.length - 1),
+  update(dt) { const s = DAY_LENS[this.len].s; if (s) this.t = (this.t + dt / s) % 1; },
+  time() { return DAY_LENS[this.len].s ? this.t : 0.38; },
+  setLen(i) { this.len = i; Store.set('dayLen', i); },
+  save() { Store.set('dayT', this.t); },
+  label() {
+    const t = this.time(), m = Math.floor(t * 1440), hh = String(Math.floor(m / 60)).padStart(2, '0'), mm = String(m % 60).padStart(2, '0');
+    return `${hh}:${mm} · ${t < 0.21 || t >= 0.8 ? 'Night' : t < 0.3 ? 'Dawn' : t < 0.71 ? 'Day' : 'Dusk'}`;
+  }
+};
+const NIGHT = { top: new THREE.Color(0x060a1c), hor: new THREE.Color(0x1a2444), bot: new THREE.Color(0x0a0d16), fog: new THREE.Color(0x141c30), hemi: new THREE.Color(0x5a6ea8), ground: new THREE.Color(0x181c26), moon: new THREE.Color(0x9ab0ff) };
+const DUSK = { top: new THREE.Color(0x4a4a8a), hor: new THREE.Color(0xff8a50), fog: new THREE.Color(0xd08a6a), sun: new THREE.Color(0xffa060) };
+const _dc = new THREE.Color();
+
 class Zone {
   constructor(def) {
     this.def = def; this.id = def.id; this.k = def.k; this.B = BIOMES[def.b];
@@ -176,16 +194,46 @@ class Zone {
   setupAtmos() {
     const P = this.pal, d = this.def; const r = this.rng;
     const sunDir = new THREE.Vector3(Math.cos(this.seed % 6), 0.55 + (this.seed % 5) * 0.08, Math.sin(this.seed % 6));
+    let stars = 0;
     if (d.k === 'dungeon') { scene.background = new THREE.Color(this.ds.fog); scene.fog = new THREE.Fog(this.ds.fog, 8, 85); }
     else {
       scene.background = new THREE.Color(P.sky[1]); scene.fog = new THREE.Fog(P.fog, 40, P.ff);
-      const dark = new THREE.Color(P.sky[0]).getHSL({}).l < 0.15;
-      this.sky = makeSky(P.sky[0], P.sky[1], P.sky[2], sunDir, d.k === 'veil' ? P.glow : P.sun, { planet: P.planet || (d.k === 'veil' ? P.glow : 0), planetAng: (this.seed % 628) / 100, planetY: 260 + this.seed % 200, stars: dark ? 0.9 : (d.k === 'veil' ? 0.4 : 0), clouds: d.k !== 'veil' && d.b !== 'polluted', seed: this.seed, cloudCol: d.b === 'wasteland' ? 0xd8c0b0 : 0xffffff });
+      const dark = new THREE.Color(P.sky[0]).getHSL({}).l < 0.15; stars = dark ? 0.9 : (d.k === 'veil' ? 0.4 : 0);
+      this.sky = makeSky(P.sky[0], P.sky[1], P.sky[2], sunDir, d.k === 'veil' ? P.glow : P.sun, { planet: P.planet || (d.k === 'veil' ? P.glow : 0), planetAng: (this.seed % 628) / 100, planetY: 260 + this.seed % 200, stars, clouds: d.k !== 'veil' && d.b !== 'polluted', seed: this.seed, cloudCol: d.b === 'wasteland' ? 0xd8c0b0 : 0xffffff });
       this.group.add(this.sky);
     }
     const hemi = new THREE.HemisphereLight(d.k === 'dungeon' ? this.ds.light : P.sky[1], d.k === 'dungeon' ? this.ds.floor : P.g[0], d.k === 'dungeon' ? 0.55 : 0.5);
     const sun = new THREE.DirectionalLight(d.k === 'dungeon' ? this.ds.light : P.sun, d.k === 'dungeon' ? 0.55 : 0.82); sun.position.copy(sunDir).multiplyScalar(100);
     this.group.add(hemi, sun);
+    if (d.k === 'dungeon') { vmHemi.color.set(0xffffff); vmHemi.intensity = vmSun.intensity = 0.75; return; }
+    // the sun crosses the sky on a tilted arc whose bearing comes from the zone's old fixed sun
+    const az = this.seed % 6, east = new THREE.Vector3(Math.cos(az), 0, Math.sin(az)), tilt = 0.45;
+    const up = new THREE.Vector3(0, Math.cos(tilt), 0).addScaledVector(new THREE.Vector3(-east.z, 0, east.x), Math.sin(tilt));
+    const C = c => new THREE.Color(c);
+    this.day = { east, up, hemi, sun, stars, sunCol: C(d.k === 'veil' ? P.glow : P.sun), sky: [C(P.sky[0]), C(P.sky[1]), C(P.sky[2])], fog: C(P.fog), hemiSky: C(P.sky[1]), hemiGround: C(P.g[0]),
+      night: [C(P.sky[0]).lerp(NIGHT.top, 0.85), C(P.sky[1]).lerp(NIGHT.hor, 0.85), C(P.sky[2]).lerp(NIGHT.bot, 0.85)], nightFog: C(P.fog).lerp(NIGHT.fog, 0.85), dir: new THREE.Vector3() };
+    this.updateDay();
+  }
+  updateDay() {
+    const D = this.day; if (!D) return;
+    const a = (DayClock.time() - 0.25) * TAU, el = Math.sin(a);
+    D.dir.copy(D.east).multiplyScalar(Math.cos(a)).addScaledVector(D.up, el);
+    const day = smooth(-0.14, 0.2, el), dusk = Math.exp(-(el / 0.2) * (el / 0.2)), sunK = smooth(-0.04, 0.22, el), moonK = smooth(-0.04, 0.22, -el);
+    const tone = (out, dayC, nightC, duskC, dk) => { out.copy(nightC).lerp(dayC, day); if (duskC) out.lerp(duskC, dusk * dk); return out; };
+    if (this.sky) {
+      const U = this.sky.userData.mat.uniforms;
+      tone(U.top.value, D.sky[0], D.night[0], DUSK.top, 0.45); tone(U.hor.value, D.sky[1], D.night[1], DUSK.hor, 0.6); tone(U.bot.value, D.sky[2], D.night[2], null, 0);
+      U.sunDir.value.copy(D.dir); U.moonDir.value.copy(D.dir).negate(); U.sunVis.value = smooth(-0.08, 0.02, el); U.moonVis.value = smooth(-0.02, 0.12, -el);
+      U.sunCol.value.copy(D.sunCol).lerp(DUSK.sun, dusk * 0.6);
+      const st = this.sky.userData.stars; if (st) { st.material.opacity = Math.max(D.stars, (1 - day) * 0.9); st.visible = st.material.opacity > 0.01; }
+    }
+    tone(scene.fog.color, D.fog, D.nightFog, DUSK.fog, 0.35); scene.background.copy(scene.fog.color);
+    D.hemi.color.copy(NIGHT.hemi).lerp(D.hemiSky, day); D.hemi.groundColor.copy(NIGHT.ground).lerp(D.hemiGround, day); D.hemi.intensity = lerp(0.34, 0.5, day);
+    vmHemi.color.copy(NIGHT.moon).lerp(_dc.set(0xffffff), day); vmHemi.intensity = lerp(0.5, 0.75, day); vmSun.intensity = lerp(0.3, 0.75, day);
+    // one directional light plays sun by day and moon by night; it fades out near the horizon so the swap is invisible
+    if (el >= 0) { D.sun.position.copy(D.dir).multiplyScalar(100); D.sun.color.copy(D.sunCol).lerp(DUSK.sun, dusk * 0.7); D.sun.intensity = 0.82 * sunK; }
+    else { D.sun.position.copy(D.dir).multiplyScalar(-100); D.sun.color.copy(NIGHT.moon); D.sun.intensity = 0.3 * moonK; }
+    if (this.winMat) this.winMat.emissiveIntensity = lerp(1.5, 0.9, day);
   }
 
   // ---------- master build ----------
@@ -477,7 +525,7 @@ class Zone {
       const geom = mergeGeos(items); items.forEach(i => i.g.dispose());
       const frame = style === 'corp' ? '#9aa8b8' : style === 'clan' ? '#3a2a20' : '#6a7a70';
       const mat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradTex, map: windowTexture(winLit, '#f4f4f4', frame, this.seed), emissiveMap: glowTexture(winLit, this.seed), emissive: 0xffffff, emissiveIntensity: 0.9 });
-      this.group.add(new THREE.Mesh(geom, mat));
+      this.group.add(new THREE.Mesh(geom, mat)); this.winMat = mat;
     }
     // skybridges
     if (style === 'corp') for (let i = 0; i < towers.length; i++) for (let j = i + 1; j < towers.length; j++) {
@@ -581,7 +629,7 @@ class Zone {
     }
   }
 
-  update(t) { for (const a of this.anims) a(t); if (this.sky) this.sky.position.copy(camera.position); }
+  update(t) { for (const a of this.anims) a(t); if (this.sky) this.sky.position.copy(camera.position); this.updateDay(); }
   dispose() {
     scene.remove(this.group); const cached = new Set(GEO.values()); Object.values(TREE_GEO).forEach(g => { if (g.trunk) cached.add(g.trunk); if (g.crown) cached.add(g.crown); });
     const mats = new Set(matCache.values());

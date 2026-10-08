@@ -1,5 +1,5 @@
 // ===================== RENDERER =====================
-let renderer, scene, camera, vmScene, vmCamera, rt, postScene, postCam, postMat;
+let renderer, scene, camera, vmScene, vmCamera, rt, postScene, postCam, postMat, vmHemi, vmSun;
 const GFX = { quality: Store.get('quality', isTouch ? 0 : 1), fov: Store.get('fov', 78) };
 const QUALITY = [{ pr: 0.75, name: 'Low' }, { pr: 1, name: 'Medium' }, { pr: 1.5, name: 'High' }];
 
@@ -30,8 +30,8 @@ function initRenderer() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(GFX.fov, 1, 0.15, 1500); camera.rotation.order = 'YXZ';
   vmScene = new THREE.Scene(); vmCamera = new THREE.PerspectiveCamera(56, 1, 0.01, 10);
-  vmScene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.75));
-  const vd = new THREE.DirectionalLight(0xffffff, 0.75); vd.position.set(0.5, 1, 0.6); vmScene.add(vd);
+  vmHemi = new THREE.HemisphereLight(0xffffff, 0x445566, 0.75); vmScene.add(vmHemi);
+  vmSun = new THREE.DirectionalLight(0xffffff, 0.75); vmSun.position.set(0.5, 1, 0.6); vmScene.add(vmSun);
   vmScene.add(vmCamera);
   rt = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: true });
   rt.depthTexture = new THREE.DepthTexture(4, 4); rt.depthTexture.type = THREE.UnsignedIntType;
@@ -82,15 +82,16 @@ function renderFrame(t) {
 function makeSky(top, hor, bot, sunDir, sunCol, opts = {}) {
   const g = new THREE.Group();
   const mat = new THREE.ShaderMaterial({
-    uniforms: { top: { value: new THREE.Color(top) }, hor: { value: new THREE.Color(hor) }, bot: { value: new THREE.Color(bot) }, sunDir: { value: sunDir.clone().normalize() }, sunCol: { value: new THREE.Color(sunCol) }, sunSize: { value: opts.sunSize || 1 } },
+    uniforms: { top: { value: new THREE.Color(top) }, hor: { value: new THREE.Color(hor) }, bot: { value: new THREE.Color(bot) }, sunDir: { value: sunDir.clone().normalize() }, sunCol: { value: new THREE.Color(sunCol) }, sunSize: { value: opts.sunSize || 1 }, sunVis: { value: 1 }, moonDir: { value: sunDir.clone().normalize().negate() }, moonVis: { value: 0 } },
     vertexShader: 'varying vec3 vP; void main(){ vP=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-    fragmentShader: `varying vec3 vP; uniform vec3 top,hor,bot,sunCol,sunDir; uniform float sunSize;
+    fragmentShader: `varying vec3 vP; uniform vec3 top,hor,bot,sunCol,sunDir,moonDir; uniform float sunSize,sunVis,moonVis;
       void main(){ float h=vP.y; vec3 c= h>0.0 ? mix(hor,top,pow(clamp(h,0.,1.),0.55)) : mix(hor,bot,pow(clamp(-h*3.0,0.,1.),0.6));
-        float s=max(dot(vP,sunDir),0.0); c+=sunCol*(smoothstep(0.9985-0.0015*sunSize,0.9992-0.0012*sunSize,s)*1.2+pow(s,10.0)*0.22);
+        float s=max(dot(vP,sunDir),0.0); c+=sunCol*sunVis*(smoothstep(0.9985-0.0015*sunSize,0.9992-0.0012*sunSize,s)*1.2+pow(s,10.0)*0.22);
+        float m=max(dot(vP,moonDir),0.0); c+=vec3(0.85,0.9,1.0)*moonVis*(smoothstep(0.9994,0.9997,m)*0.9+pow(m,40.0)*0.08);
         c=floor(c*24.0+0.5)/24.0; gl_FragColor=vec4(c,1.0); }`,
     side: THREE.BackSide, depthWrite: false, fog: false
   });
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(1300, 32, 16), mat); dome.renderOrder = -10; g.add(dome);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1300, 32, 16), mat); dome.renderOrder = -10; g.add(dome); g.userData.mat = mat;
   if (opts.planet) {
     const pg = new THREE.Group(); const pc = opts.planet;
     const pl = new THREE.Mesh(new THREE.IcosahedronGeometry(150, 3), new THREE.MeshToonMaterial({ color: pc, gradientMap: gradTex, fog: false }));
@@ -101,11 +102,11 @@ function makeSky(top, hor, bot, sunDir, sunCol, opts = {}) {
     const moon = new THREE.Mesh(new THREE.IcosahedronGeometry(38, 2), new THREE.MeshToonMaterial({ color: 0xdedad0, gradientMap: gradTex, fog: false }));
     moon.position.set(Math.cos(ang + 1.1) * 1050, (opts.planetY || 330) + 200, Math.sin(ang + 1.1) * 1050); g.add(moon);
   }
-  if (opts.stars) {
+  if (opts.stars !== undefined) {
     const n = 600, pos = new Float32Array(n * 3); const r = mulberry32(7);
     for (let i = 0; i < n; i++) { const u = r() * 2 - 1, th = r() * TAU, y = Math.abs(u); const s = Math.sqrt(1 - y * y); pos[i * 3] = Math.cos(th) * s * 1200; pos[i * 3 + 1] = y * 1200; pos[i * 3 + 2] = Math.sin(th) * s * 1200; }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false, fog: false, transparent: true, opacity: opts.stars })));
+    const st = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false, fog: false, transparent: true, opacity: opts.stars })); g.add(st); g.userData.stars = st;
   }
   if (opts.clouds) {
     const cg = new THREE.IcosahedronGeometry(1, 0); const cm = new THREE.MeshToonMaterial({ color: opts.cloudCol || 0xffffff, gradientMap: gradTex, fog: false });

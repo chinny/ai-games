@@ -68,7 +68,8 @@ button { font-family: var(--f-ui); }
 #hud > * { position: absolute; }
 #zoneTag { top: calc(12px + env(safe-area-inset-top, 0px)); left: 16px; }
 #zoneName { font-family: var(--f-display); font-size: 18px; letter-spacing: .04em; text-shadow: 2px 2px 0 #000; }
-#zoneSub { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); text-shadow: 1px 1px 0 #000; }
+#zoneSub, #zoneTime { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); text-shadow: 1px 1px 0 #000; }
+#zoneTime { margin-left: 10px; color: var(--cyan); white-space: nowrap; }
 #credits { top: calc(54px + env(safe-area-inset-top, 0px)); left: 16px; font-weight: 700; color: #f2c230; font-size: 14px; text-shadow: 1px 1px 0 #000; font-variant-numeric: tabular-nums; }
 #compass { top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; width: min(520px, 46vw); height: 30px; transform: translateX(-50%); overflow: hidden; border-bottom: 2px solid rgba(79,214,255,.5); background: linear-gradient(90deg, transparent, rgba(5,14,24,.55) 20%, rgba(5,14,24,.55) 80%, transparent); }
 #compass .cm { position: absolute; top: 2px; transform: translateX(-50%); font-size: 11px; font-weight: 700; white-space: nowrap; text-shadow: 1px 1px 0 #000; }
@@ -276,7 +277,7 @@ body.touch #quest { top: calc(92px + env(safe-area-inset-top, 0px)); }
 <div id="app">
   <div id="game"></div>
   <div id="hud" hidden>
-    <div id="zoneTag"><div id="zoneName"></div><div id="zoneSub"></div></div>
+    <div id="zoneTag"><div><span id="zoneName"></span><span id="zoneTime"></span></div><div id="zoneSub"></div></div>
     <div id="credits"></div>
     <div id="compass"><div id="compassMarks"></div><div id="compassNeedle"></div></div>
     <div id="quest"></div>
@@ -716,7 +717,7 @@ const SIGNS = {
 };
 
 // ===================== RENDERER =====================
-let renderer, scene, camera, vmScene, vmCamera, rt, postScene, postCam, postMat;
+let renderer, scene, camera, vmScene, vmCamera, rt, postScene, postCam, postMat, vmHemi, vmSun;
 const GFX = { quality: Store.get('quality', isTouch ? 0 : 1), fov: Store.get('fov', 78) };
 const QUALITY = [{ pr: 0.75, name: 'Low' }, { pr: 1, name: 'Medium' }, { pr: 1.5, name: 'High' }];
 
@@ -747,8 +748,8 @@ function initRenderer() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(GFX.fov, 1, 0.15, 1500); camera.rotation.order = 'YXZ';
   vmScene = new THREE.Scene(); vmCamera = new THREE.PerspectiveCamera(56, 1, 0.01, 10);
-  vmScene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.75));
-  const vd = new THREE.DirectionalLight(0xffffff, 0.75); vd.position.set(0.5, 1, 0.6); vmScene.add(vd);
+  vmHemi = new THREE.HemisphereLight(0xffffff, 0x445566, 0.75); vmScene.add(vmHemi);
+  vmSun = new THREE.DirectionalLight(0xffffff, 0.75); vmSun.position.set(0.5, 1, 0.6); vmScene.add(vmSun);
   vmScene.add(vmCamera);
   rt = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: true });
   rt.depthTexture = new THREE.DepthTexture(4, 4); rt.depthTexture.type = THREE.UnsignedIntType;
@@ -799,15 +800,16 @@ function renderFrame(t) {
 function makeSky(top, hor, bot, sunDir, sunCol, opts = {}) {
   const g = new THREE.Group();
   const mat = new THREE.ShaderMaterial({
-    uniforms: { top: { value: new THREE.Color(top) }, hor: { value: new THREE.Color(hor) }, bot: { value: new THREE.Color(bot) }, sunDir: { value: sunDir.clone().normalize() }, sunCol: { value: new THREE.Color(sunCol) }, sunSize: { value: opts.sunSize || 1 } },
+    uniforms: { top: { value: new THREE.Color(top) }, hor: { value: new THREE.Color(hor) }, bot: { value: new THREE.Color(bot) }, sunDir: { value: sunDir.clone().normalize() }, sunCol: { value: new THREE.Color(sunCol) }, sunSize: { value: opts.sunSize || 1 }, sunVis: { value: 1 }, moonDir: { value: sunDir.clone().normalize().negate() }, moonVis: { value: 0 } },
     vertexShader: 'varying vec3 vP; void main(){ vP=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-    fragmentShader: `varying vec3 vP; uniform vec3 top,hor,bot,sunCol,sunDir; uniform float sunSize;
+    fragmentShader: `varying vec3 vP; uniform vec3 top,hor,bot,sunCol,sunDir,moonDir; uniform float sunSize,sunVis,moonVis;
       void main(){ float h=vP.y; vec3 c= h>0.0 ? mix(hor,top,pow(clamp(h,0.,1.),0.55)) : mix(hor,bot,pow(clamp(-h*3.0,0.,1.),0.6));
-        float s=max(dot(vP,sunDir),0.0); c+=sunCol*(smoothstep(0.9985-0.0015*sunSize,0.9992-0.0012*sunSize,s)*1.2+pow(s,10.0)*0.22);
+        float s=max(dot(vP,sunDir),0.0); c+=sunCol*sunVis*(smoothstep(0.9985-0.0015*sunSize,0.9992-0.0012*sunSize,s)*1.2+pow(s,10.0)*0.22);
+        float m=max(dot(vP,moonDir),0.0); c+=vec3(0.85,0.9,1.0)*moonVis*(smoothstep(0.9994,0.9997,m)*0.9+pow(m,40.0)*0.08);
         c=floor(c*24.0+0.5)/24.0; gl_FragColor=vec4(c,1.0); }`,
     side: THREE.BackSide, depthWrite: false, fog: false
   });
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(1300, 32, 16), mat); dome.renderOrder = -10; g.add(dome);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1300, 32, 16), mat); dome.renderOrder = -10; g.add(dome); g.userData.mat = mat;
   if (opts.planet) {
     const pg = new THREE.Group(); const pc = opts.planet;
     const pl = new THREE.Mesh(new THREE.IcosahedronGeometry(150, 3), new THREE.MeshToonMaterial({ color: pc, gradientMap: gradTex, fog: false }));
@@ -818,11 +820,11 @@ function makeSky(top, hor, bot, sunDir, sunCol, opts = {}) {
     const moon = new THREE.Mesh(new THREE.IcosahedronGeometry(38, 2), new THREE.MeshToonMaterial({ color: 0xdedad0, gradientMap: gradTex, fog: false }));
     moon.position.set(Math.cos(ang + 1.1) * 1050, (opts.planetY || 330) + 200, Math.sin(ang + 1.1) * 1050); g.add(moon);
   }
-  if (opts.stars) {
+  if (opts.stars !== undefined) {
     const n = 600, pos = new Float32Array(n * 3); const r = mulberry32(7);
     for (let i = 0; i < n; i++) { const u = r() * 2 - 1, th = r() * TAU, y = Math.abs(u); const s = Math.sqrt(1 - y * y); pos[i * 3] = Math.cos(th) * s * 1200; pos[i * 3 + 1] = y * 1200; pos[i * 3 + 2] = Math.sin(th) * s * 1200; }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false, fog: false, transparent: true, opacity: opts.stars })));
+    const st = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false, fog: false, transparent: true, opacity: opts.stars })); g.add(st); g.userData.stars = st;
   }
   if (opts.clouds) {
     const cg = new THREE.IcosahedronGeometry(1, 0); const cm = new THREE.MeshToonMaterial({ color: opts.cloudCol || 0xffffff, gradientMap: gradTex, fog: false });
@@ -1203,6 +1205,24 @@ function buildCrystalCluster(color) {
 let zone = null;
 const GRID_G = 16;
 
+// ---------- accelerated day/night ----------
+// t is the fraction of a day: 0 midnight, 0.25 sunrise, 0.5 noon, 0.75 sunset. Shared by every zone and kept across sessions.
+const DAY_LENS = [{ s: 0, name: 'Off' }, { s: 1440, name: '24 min' }, { s: 720, name: '12 min' }, { s: 360, name: '6 min' }, { s: 120, name: '2 min' }];
+const DayClock = {
+  t: Store.get('dayT', 0.3), len: clamp(Store.get('dayLen', 2), 0, DAY_LENS.length - 1),
+  update(dt) { const s = DAY_LENS[this.len].s; if (s) this.t = (this.t + dt / s) % 1; },
+  time() { return DAY_LENS[this.len].s ? this.t : 0.38; },
+  setLen(i) { this.len = i; Store.set('dayLen', i); },
+  save() { Store.set('dayT', this.t); },
+  label() {
+    const t = this.time(), m = Math.floor(t * 1440), hh = String(Math.floor(m / 60)).padStart(2, '0'), mm = String(m % 60).padStart(2, '0');
+    return `${hh}:${mm} · ${t < 0.21 || t >= 0.8 ? 'Night' : t < 0.3 ? 'Dawn' : t < 0.71 ? 'Day' : 'Dusk'}`;
+  }
+};
+const NIGHT = { top: new THREE.Color(0x060a1c), hor: new THREE.Color(0x1a2444), bot: new THREE.Color(0x0a0d16), fog: new THREE.Color(0x141c30), hemi: new THREE.Color(0x5a6ea8), ground: new THREE.Color(0x181c26), moon: new THREE.Color(0x9ab0ff) };
+const DUSK = { top: new THREE.Color(0x4a4a8a), hor: new THREE.Color(0xff8a50), fog: new THREE.Color(0xd08a6a), sun: new THREE.Color(0xffa060) };
+const _dc = new THREE.Color();
+
 class Zone {
   constructor(def) {
     this.def = def; this.id = def.id; this.k = def.k; this.B = BIOMES[def.b];
@@ -1377,16 +1397,46 @@ class Zone {
   setupAtmos() {
     const P = this.pal, d = this.def; const r = this.rng;
     const sunDir = new THREE.Vector3(Math.cos(this.seed % 6), 0.55 + (this.seed % 5) * 0.08, Math.sin(this.seed % 6));
+    let stars = 0;
     if (d.k === 'dungeon') { scene.background = new THREE.Color(this.ds.fog); scene.fog = new THREE.Fog(this.ds.fog, 8, 85); }
     else {
       scene.background = new THREE.Color(P.sky[1]); scene.fog = new THREE.Fog(P.fog, 40, P.ff);
-      const dark = new THREE.Color(P.sky[0]).getHSL({}).l < 0.15;
-      this.sky = makeSky(P.sky[0], P.sky[1], P.sky[2], sunDir, d.k === 'veil' ? P.glow : P.sun, { planet: P.planet || (d.k === 'veil' ? P.glow : 0), planetAng: (this.seed % 628) / 100, planetY: 260 + this.seed % 200, stars: dark ? 0.9 : (d.k === 'veil' ? 0.4 : 0), clouds: d.k !== 'veil' && d.b !== 'polluted', seed: this.seed, cloudCol: d.b === 'wasteland' ? 0xd8c0b0 : 0xffffff });
+      const dark = new THREE.Color(P.sky[0]).getHSL({}).l < 0.15; stars = dark ? 0.9 : (d.k === 'veil' ? 0.4 : 0);
+      this.sky = makeSky(P.sky[0], P.sky[1], P.sky[2], sunDir, d.k === 'veil' ? P.glow : P.sun, { planet: P.planet || (d.k === 'veil' ? P.glow : 0), planetAng: (this.seed % 628) / 100, planetY: 260 + this.seed % 200, stars, clouds: d.k !== 'veil' && d.b !== 'polluted', seed: this.seed, cloudCol: d.b === 'wasteland' ? 0xd8c0b0 : 0xffffff });
       this.group.add(this.sky);
     }
     const hemi = new THREE.HemisphereLight(d.k === 'dungeon' ? this.ds.light : P.sky[1], d.k === 'dungeon' ? this.ds.floor : P.g[0], d.k === 'dungeon' ? 0.55 : 0.5);
     const sun = new THREE.DirectionalLight(d.k === 'dungeon' ? this.ds.light : P.sun, d.k === 'dungeon' ? 0.55 : 0.82); sun.position.copy(sunDir).multiplyScalar(100);
     this.group.add(hemi, sun);
+    if (d.k === 'dungeon') { vmHemi.color.set(0xffffff); vmHemi.intensity = vmSun.intensity = 0.75; return; }
+    // the sun crosses the sky on a tilted arc whose bearing comes from the zone's old fixed sun
+    const az = this.seed % 6, east = new THREE.Vector3(Math.cos(az), 0, Math.sin(az)), tilt = 0.45;
+    const up = new THREE.Vector3(0, Math.cos(tilt), 0).addScaledVector(new THREE.Vector3(-east.z, 0, east.x), Math.sin(tilt));
+    const C = c => new THREE.Color(c);
+    this.day = { east, up, hemi, sun, stars, sunCol: C(d.k === 'veil' ? P.glow : P.sun), sky: [C(P.sky[0]), C(P.sky[1]), C(P.sky[2])], fog: C(P.fog), hemiSky: C(P.sky[1]), hemiGround: C(P.g[0]),
+      night: [C(P.sky[0]).lerp(NIGHT.top, 0.85), C(P.sky[1]).lerp(NIGHT.hor, 0.85), C(P.sky[2]).lerp(NIGHT.bot, 0.85)], nightFog: C(P.fog).lerp(NIGHT.fog, 0.85), dir: new THREE.Vector3() };
+    this.updateDay();
+  }
+  updateDay() {
+    const D = this.day; if (!D) return;
+    const a = (DayClock.time() - 0.25) * TAU, el = Math.sin(a);
+    D.dir.copy(D.east).multiplyScalar(Math.cos(a)).addScaledVector(D.up, el);
+    const day = smooth(-0.14, 0.2, el), dusk = Math.exp(-(el / 0.2) * (el / 0.2)), sunK = smooth(-0.04, 0.22, el), moonK = smooth(-0.04, 0.22, -el);
+    const tone = (out, dayC, nightC, duskC, dk) => { out.copy(nightC).lerp(dayC, day); if (duskC) out.lerp(duskC, dusk * dk); return out; };
+    if (this.sky) {
+      const U = this.sky.userData.mat.uniforms;
+      tone(U.top.value, D.sky[0], D.night[0], DUSK.top, 0.45); tone(U.hor.value, D.sky[1], D.night[1], DUSK.hor, 0.6); tone(U.bot.value, D.sky[2], D.night[2], null, 0);
+      U.sunDir.value.copy(D.dir); U.moonDir.value.copy(D.dir).negate(); U.sunVis.value = smooth(-0.08, 0.02, el); U.moonVis.value = smooth(-0.02, 0.12, -el);
+      U.sunCol.value.copy(D.sunCol).lerp(DUSK.sun, dusk * 0.6);
+      const st = this.sky.userData.stars; if (st) { st.material.opacity = Math.max(D.stars, (1 - day) * 0.9); st.visible = st.material.opacity > 0.01; }
+    }
+    tone(scene.fog.color, D.fog, D.nightFog, DUSK.fog, 0.35); scene.background.copy(scene.fog.color);
+    D.hemi.color.copy(NIGHT.hemi).lerp(D.hemiSky, day); D.hemi.groundColor.copy(NIGHT.ground).lerp(D.hemiGround, day); D.hemi.intensity = lerp(0.34, 0.5, day);
+    vmHemi.color.copy(NIGHT.moon).lerp(_dc.set(0xffffff), day); vmHemi.intensity = lerp(0.5, 0.75, day); vmSun.intensity = lerp(0.3, 0.75, day);
+    // one directional light plays sun by day and moon by night; it fades out near the horizon so the swap is invisible
+    if (el >= 0) { D.sun.position.copy(D.dir).multiplyScalar(100); D.sun.color.copy(D.sunCol).lerp(DUSK.sun, dusk * 0.7); D.sun.intensity = 0.82 * sunK; }
+    else { D.sun.position.copy(D.dir).multiplyScalar(-100); D.sun.color.copy(NIGHT.moon); D.sun.intensity = 0.3 * moonK; }
+    if (this.winMat) this.winMat.emissiveIntensity = lerp(1.5, 0.9, day);
   }
 
   // ---------- master build ----------
@@ -1678,7 +1728,7 @@ class Zone {
       const geom = mergeGeos(items); items.forEach(i => i.g.dispose());
       const frame = style === 'corp' ? '#9aa8b8' : style === 'clan' ? '#3a2a20' : '#6a7a70';
       const mat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradTex, map: windowTexture(winLit, '#f4f4f4', frame, this.seed), emissiveMap: glowTexture(winLit, this.seed), emissive: 0xffffff, emissiveIntensity: 0.9 });
-      this.group.add(new THREE.Mesh(geom, mat));
+      this.group.add(new THREE.Mesh(geom, mat)); this.winMat = mat;
     }
     // skybridges
     if (style === 'corp') for (let i = 0; i < towers.length; i++) for (let j = i + 1; j < towers.length; j++) {
@@ -1782,7 +1832,7 @@ class Zone {
     }
   }
 
-  update(t) { for (const a of this.anims) a(t); if (this.sky) this.sky.position.copy(camera.position); }
+  update(t) { for (const a of this.anims) a(t); if (this.sky) this.sky.position.copy(camera.position); this.updateDay(); }
   dispose() {
     scene.remove(this.group); const cached = new Set(GEO.values()); Object.values(TREE_GEO).forEach(g => { if (g.trunk) cached.add(g.trunk); if (g.crown) cached.add(g.crown); });
     const mats = new Set(matCache.values());
@@ -2650,6 +2700,7 @@ const UI = {
   },
   update(dt) {
     if (Game.state !== 'play') return;
+    const zt = $('zoneTime'), tl = zone.day ? DayClock.label() : ''; if (zt.textContent !== tl) zt.textContent = tl;
     const w = (el, f) => { el.style.width = (clamp(f, 0, 1) * 100).toFixed(1) + '%'; };
     const sh = $('bSh'), hp = $('bHp');
     w(sh.firstElementChild, P.maxSh ? P.sh / P.maxSh : 0); sh.lastElementChild.textContent = fmt(P.sh);
@@ -2810,6 +2861,7 @@ const UI = {
       <div class="set"><label for="sSens">Look sensitivity</label><input type="range" id="sSens" min="0.2" max="3" step="0.05" value="${SENS.v}"><output>${SENS.v.toFixed(2)}</output></div>
       <div class="set"><label for="sFov">Field of view</label><input type="range" id="sFov" min="60" max="100" step="1" value="${GFX.fov}"><output>${GFX.fov}</output></div>
       <div class="set"><label for="sQ">Render quality</label><input type="range" id="sQ" min="0" max="2" step="1" value="${GFX.quality}"><output>${QUALITY[GFX.quality].name}</output></div>
+      <div class="set"><label for="sDay">Day length</label><input type="range" id="sDay" min="0" max="${DAY_LENS.length - 1}" step="1" value="${DayClock.len}"><output>${DAY_LENS[DayClock.len].name}</output></div>
       <div class="set"><label for="sInv">Invert look</label><input type="checkbox" id="sInv" ${SENS.invert ? 'checked' : ''}><output></output></div>
       </div><div><h3>Controls</h3><div class="keys">${[['Move', 'WASD'], ['Look', 'Mouse'], ['Fire', 'LMB'], ['Aim down sights', 'RMB'], ['Jump', 'Space'], ['Sprint', 'Shift'], ['Reload', 'R'], ['Profession skill', 'Q'], ['Grenade', 'G'], ['Melee', 'V'], ['Interact / pick up', 'E'], ['Weapons', '1-4 / Wheel'], ['Inventory', 'Tab / I'], ['Atlas', 'M'], ['Menu', 'Esc / P']].map(([a, b]) => `<div><span>${a}</span><kbd>${b}</kbd></div>`).join('')}</div>
       <p style="font-size:12px;color:var(--dim);line-height:1.5;margin-top:12px">On touch screens: drag the left side to move (push to the top edge to sprint), drag the right side to look, and use the on-screen buttons. Progress saves automatically in this browser.</p>
@@ -2820,6 +2872,7 @@ const UI = {
     if (t.id === 'sVol') { Sfx.setVol(v); out.textContent = Math.round(v * 100); } else if (t.id === 'sMus') { Sfx.setMusic(v); out.textContent = Math.round(v * 100); }
     else if (t.id === 'sSens') { SENS.v = v; Store.set('sens', v); out.textContent = v.toFixed(2); } else if (t.id === 'sFov') { GFX.fov = v; Store.set('fov', v); camera.fov = v; camera.updateProjectionMatrix(); out.textContent = v; }
     else if (t.id === 'sQ') { GFX.quality = v; Store.set('quality', v); onResize(); out.textContent = QUALITY[v].name; } else if (t.id === 'sInv') { SENS.invert = v; Store.set('invert', v); }
+    else if (t.id === 'sDay') { DayClock.setLen(v); out.textContent = DAY_LENS[v].name; }
   },
   onPanelClick(e) {
     const r = e.target.closest('[data-w],[data-p],[data-s],[data-b]'); const a = e.target.closest('[data-act]');
@@ -3026,7 +3079,7 @@ const Game = {
       this.save();
     }
   },
-  save() { if (this.state === 'play' || this.state === 'loading') { try { Store.set('save', P.serialize()); } catch (e) { } } },
+  save() { DayClock.save(); if (this.state === 'play' || this.state === 'loading') { try { Store.set('save', P.serialize()); } catch (e) { } } },
   checkTriggers(dt) {
     this.gateLock -= dt; if (this.gateLock > 0) return;
     for (const t of zone.triggers) if (Math.hypot(t.x - P.pos.x, t.z - P.pos.z) < t.r && Math.abs(zone.heightAt(t.x, t.z) - P.pos.y) < 4) { this.gateLock = 3; this.travel(t.to, zone.id); return; }
@@ -3035,11 +3088,11 @@ const Game = {
     requestAnimationFrame(() => this.loop());
     const dt = Math.min(this.clock.getDelta(), 0.05); this.t += dt; const t = this.t;
     if (this.state === 'title') {
-      this.titleT += dt; const a = this.titleT * 0.05; const R = zone.k === 'wild' ? 60 : 85; camera.position.set(Math.cos(a) * R, 26 + Math.sin(a * 0.7) * 6, Math.sin(a) * R); camera.lookAt(0, 8, 0);
+      this.titleT += dt; DayClock.update(dt); const a = this.titleT * 0.05; const R = zone.k === 'wild' ? 60 : 85; camera.position.set(Math.cos(a) * R, 26 + Math.sin(a * 0.7) * 6, Math.sin(a) * R); camera.lookAt(0, 8, 0);
       for (const c of civs) c.update(dt); for (const e of enemies) if (!e.gone && !e.hostile) e.update(dt);
     } else if (this.state === 'play') {
       if (!this.panel) {
-        P.update(dt); if (!P.dead) this.checkTriggers(dt);
+        P.update(dt); DayClock.update(dt); if (!P.dead) this.checkTriggers(dt);
         for (let i = enemies.length - 1; i >= 0; i--) { const e = enemies[i]; e.update(dt); if (e.gone) enemies.splice(i, 1); }
         for (const c of civs) c.update(dt);
         updateProjs(dt); updatePickups(dt); if (sentry) sentry.update(dt);
@@ -3059,7 +3112,7 @@ const Game = {
 window.addEventListener('beforeunload', () => Game.save());
 document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(); });
 Game.boot();
-window.__vy = { Game, P, get zone() { return zone; }, enemies, pickups, ZONES, Zone, UI, get renderer() { return renderer; }, GFX, Input, makeGun, makeShield, dropPickup };
+window.__vy = { Game, P, DayClock, get zone() { return zone; }, enemies, pickups, ZONES, Zone, UI, get renderer() { return renderer; }, GFX, Input, makeGun, makeShield, dropPickup };
 
 })();
 </script>
