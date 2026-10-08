@@ -73,7 +73,7 @@ const GLIM_LEG = ['Little Sun', 'Second Moon', "Marr's Lamp", 'Night Owl'];
 function makeGlim(lvl, rar, style) {
   lvl = clamp(Math.round(lvl), 1, 72); if (rar == null) rar = rollRarity();
   style = style || pick(rnd, Object.keys(GLIM_STYLES).filter(k => GLIM_STYLES[k].minR <= rar)); const G = GLIM_STYLES[style], v = () => rr(rnd, 0.94, 1.06);
-  const it = { uid: uid(), type: 'glim', style, mfg: G.mfg, lvl, rar, col: rar ? pick(rnd, G.cols) : G.cols[0], bright: (1 + rar * 0.22) * v(), reach: (13 + rar * 3.5) * v(), fx: null };
+  const it = { uid: uid(), type: 'glim', style, mfg: G.mfg, lvl, rar, col: rar ? pick(rnd, G.cols) : G.cols[0], bright: (1 + rar * 0.22) * v(), reach: (6 + rar * 1.5) * v(), fx: null };
   if (rar === 4) { it.fx = 'expose'; it.name = pick(rnd, GLIM_LEG); it.flavor = 'Things that hide from light hate this one.'; }
   else { it.name = `${GLIM_PREFIX[rar]} ${G.n}`; it.flavor = G.txt; }
   it.value = Math.round((10 + lvl * 5) * (1 + rar * rar * 0.6)); return it;

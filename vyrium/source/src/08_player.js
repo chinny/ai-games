@@ -111,16 +111,16 @@ const Glim = {
     const dark = zone.k === 'dungeon' ? 1 : zone.lampsOn; this.lvl = lerp(this.lvl, P.glimOn ? dark : 0, Math.min(1, dt * 3));
     const G = GLIM_STYLES[it.style]; this.col.set(it.col); if (G.cycle) this.col.offsetHSL((t * 0.05) % 1, 0, 0);
     const fl = G.flicker ? 1 - G.flicker * Math.max(0, Math.sin(t * 13) * Math.sin(t * 4.7)) : 1;
-    if (this.model) this.model.userData.core.color.copy(this.col).multiplyScalar(0.45 + 0.55 * Math.max(this.lvl, zone.k === 'dungeon' ? 1 : 1 - zone.lampsOn));
-    // the device shows its full colour; the light it throws is mostly white with a tint, so the world stays readable
-    this.cast.copy(this.col).lerp(_white, 0.55);
-    this.light.position.copy(this.root.position); this.light.color.copy(this.cast); this.light.distance = it.reach; this.light.intensity = it.bright * 0.95 * this.lvl * fl;
-    this.vmLight.color.copy(this.cast); this.vmLight.intensity = 0.5 * this.lvl * fl;
+    if (this.model) this.model.userData.core.color.copy(this.col).multiplyScalar(0.4 + 0.45 * Math.max(this.lvl, zone.k === 'dungeon' ? 1 : 1 - zone.lampsOn));
+    // a soft warm glow: the device shows its own colour, but the light it throws leans amber and stays close
+    this.cast.copy(this.col).lerp(_warm, 0.65);
+    this.light.position.copy(this.root.position); this.light.color.copy(this.cast); this.light.distance = it.reach; this.light.intensity = it.bright * 0.4 * this.lvl * fl;
+    this.vmLight.color.copy(this.cast); this.vmLight.intensity = 0.15 * this.lvl * fl;
   },
   lit(e) { const it = P.glimItem; return it && this.lvl > 0.3 && e.pos.distanceTo(P.pos) < it.reach; },
   toggle() { P.glimOn = !P.glimOn; Sfx.play('ui'); UI.feed(P.glimOn ? 'Glim on' : 'Glim off', P.glimOn ? '#ffe9a8' : '#8fa3b4'); UI.dirty = true; }
 };
-const _white = new THREE.Color(0xffffff);
+const _warm = new THREE.Color(0xffc27a);
 const equippedFor = (it) => !it ? null : it.type === 'gun' ? P.gun() : it.type === 'glim' ? P.glimItem : P.shieldItem;
 
 // ===================== PLAYER =====================
