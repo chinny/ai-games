@@ -1201,6 +1201,19 @@ function buildDungeonDoor(color) {
   for (const s of [-1, 1]) mk(gBox(0.3, 5.4, 0.3), glowMat(color), g, s * 2.2, 2.7, 3.2);
   mk(gBox(4.6, 0.3, 0.3), glowMat(color), g, 0, 5.3, 3.2); return g;
 }
+// Glim models are ~0.12m across; userData.core is the glowing part (own material so it can dim), userData.anim(t) animates it
+function buildGlim(it) {
+  const g = new THREE.Group(), dark = toon(0x262a32), core = new THREE.MeshBasicMaterial({ color: it.col }), spin = [];
+  if (it.style === 'orb') { mk(gSph(0.04, 1), core, g); mk(gTorus(0.062, 0.012, 4, 16), dark, g, 0, 0, 0, Math.PI / 2, 0, 0); mk(gCyl(0.004, 0.004, 0.05, 4), dark, g, 0, 0.06, 0); spin.push([g, 0, 0.6, 0]); }
+  else if (it.style === 'lantern') { mk(gCyl(0.035, 0.035, 0.07, 6), core, g); mk(gCone(0.05, 0.035, 6), dark, g, 0, 0.052, 0); mk(gCyl(0.045, 0.03, 0.015, 6), dark, g, 0, -0.042, 0); mk(gTorus(0.02, 0.004, 4, 10), dark, g, 0, 0.085, 0); for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; mk(gBox(0.006, 0.07, 0.006), dark, g, Math.cos(a) * 0.036, 0, Math.sin(a) * 0.036); } }
+  else if (it.style === 'halo') { mk(gSph(0.03, 1), core, g); for (let i = 0; i < 2; i++) { const p = piv(g); mk(gTorus(0.07 - i * 0.015, 0.006, 4, 20), core, p); spin.push([p, 1.3 - i * 0.4, 0.7 + i, 0]); } mk(gBox(0.03, 0.03, 0.03), dark, g, 0, -0.05, 0, 0.6, 0.6, 0); }
+  else if (it.style === 'drone') { mk(gBox(0.07, 0.022, 0.07), dark, g); mk(gCyl(0.022, 0.026, 0.012, 8), core, g, 0, -0.016, 0); for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + Math.PI / 4, x = Math.cos(a) * 0.065, z = Math.sin(a) * 0.065; mk(gBox(0.06, 0.008, 0.01), dark, g, x / 2, 0, z / 2, 0, -a, 0); const r = piv(g, x, 0.014, z); mk(gBox(0.055, 0.003, 0.008), toon(0x8a96a8), r); spin.push([r, 0, 40 + i, 0]); } }
+  else if (it.style === 'prism') { const p = piv(g); mk(new THREE.OctahedronGeometry(0.045, 0), core, p, 0, 0, 0, 0, 0, 0, 1, 1.5, 1); spin.push([p, 0, 1.2, 0]); const o = piv(g); for (let i = 0; i < 3; i++) { const a = i / 3 * TAU; mk(new THREE.OctahedronGeometry(0.012, 0), core, o, Math.cos(a) * 0.075, 0, Math.sin(a) * 0.075); } spin.push([o, 0.3, -2, 0]); }
+  else { mk(gSph(0.032, 1), core, g); mk(gSph(0.055, 1), new THREE.MeshBasicMaterial({ color: it.col, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }), g); const o = piv(g); for (let i = 0; i < 4; i++) { const a = i / 4 * TAU; mk(gSph(0.008, 0), core, o, Math.cos(a) * 0.08, Math.sin(a * 2) * 0.02, Math.sin(a) * 0.08); } spin.push([o, 0.5, 1.6, 0.2]); }
+  g.userData.core = core;
+  g.userData.anim = (t) => { for (const [o, x, y, z] of spin) o.rotation.set(t * x, t * y, t * z); if (it.style === 'lantern') g.rotation.z = Math.sin(t * 2.2) * 0.18; };
+  return g;
+}
 function buildCrystalCluster(color) {
   const g = new THREE.Group(); const m = glowMat(color); const m2 = toon(new THREE.Color(color).multiplyScalar(0.6).getHex());
   for (let i = 0; i < 5; i++) { const h = 1 + rnd() * 2.5; mk(gCone(0.3 + rnd() * 0.3, h, 5), i % 2 ? m : m2, g, rr(rnd, -0.8, 0.8), h / 2, rr(rnd, -0.8, 0.8), rr(rnd, -0.4, 0.4), 0, rr(rnd, -0.4, 0.4)); }
@@ -2033,6 +2046,27 @@ const SHIELD_MFG = { cyrex: { cap: 1.15, del: 1.0, rate: 1.0 }, clanforge: { cap
 const SHIELD_FX = { spike: 'Melee attackers take heavy damage', nova: 'Releases a shock nova when broken', amp: 'Gun damage +20% while shield is full', absorb: '25% chance to turn enemy bullets into ammo' };
 const SHIELD_NAMES = ['Bulwark', 'Aegis', 'Carapace', 'Ward', 'Halo', 'Bastion', 'Mantle'];
 
+// Glims: light devices that float over the player's shoulder. Style sets the look; rarity sets brightness and reach.
+const GLIM_STYLES = {
+  orb: { n: 'Lumen Orb', mfg: 'dustline', cols: [0xfff0d0, 0xd8f4ff], minR: 0, txt: 'A lamp with opinions about where you are going.' },
+  lantern: { n: 'Lantern', mfg: 'clanforge', cols: [0xffb050, 0xff8a3a], minR: 0, flicker: 0.12, txt: 'Clan glasswork. It swings when you run.' },
+  halo: { n: 'Halo Core', mfg: 'cyrex', cols: [0x4fd6ff, 0x7ae0ff, 0xff3ad0], minR: 1, txt: 'Two rings, one core, zero warranty.' },
+  drone: { n: 'Spotter Drone', mfg: 'vektor', cols: [0xffffff, 0xc8f0ff, 0x9be37a], minR: 1, txt: 'Four rotors and a floodlight. Hums when it is happy.' },
+  prism: { n: 'Prism Shard', mfg: 'helix', cols: [0xff5ab0, 0x7a5aff, 0x3affd0], minR: 2, cycle: true, txt: 'Bends light into colours that do not have names yet.' },
+  wisp: { n: 'Veil Wisp', mfg: 'nanodyne', cols: [0xc26bff, 0x3affd0, 0xffd27a], minR: 3, txt: 'It followed someone out of a rift. Now it follows you.' },
+};
+const GLIM_PREFIX = ['Basic', 'Tuned', 'Bright', 'Radiant'];
+const GLIM_LEG = ['Little Sun', 'Second Moon', "Marr's Lamp", 'Night Owl'];
+function makeGlim(lvl, rar, style) {
+  lvl = clamp(Math.round(lvl), 1, 72); if (rar == null) rar = rollRarity();
+  style = style || pick(rnd, Object.keys(GLIM_STYLES).filter(k => GLIM_STYLES[k].minR <= rar)); const G = GLIM_STYLES[style], v = () => rr(rnd, 0.94, 1.06);
+  const it = { uid: uid(), type: 'glim', style, mfg: G.mfg, lvl, rar, col: rar ? pick(rnd, G.cols) : G.cols[0], bright: (1 + rar * 0.22) * v(), reach: (6 + rar * 1.5) * v(), fx: null };
+  if (rar === 4) { it.fx = 'expose'; it.name = pick(rnd, GLIM_LEG); it.flavor = 'Things that hide from light hate this one.'; }
+  else { it.name = `${GLIM_PREFIX[rar]} ${G.n}`; it.flavor = G.txt; }
+  it.value = Math.round((10 + lvl * 5) * (1 + rar * rar * 0.6)); return it;
+}
+const GLIM_FX = { expose: 'Enemies inside its light take +10% damage' };
+
 function rollRarity(luck = 0) { return wpick(rnd, [[0, Math.max(10, 60 - luck * 6)], [1, 25], [2, 9 + luck * 1.5], [3, 3.2 + luck * 0.9], [4, 0.75 + luck * 0.4]]); }
 function makeGun(lvl, rar, kind, mfg) {
   lvl = clamp(Math.round(lvl), 1, 72); if (rar == null) rar = rollRarity();
@@ -2059,7 +2093,7 @@ function makeShield(lvl, rar) {
   it.name = (it.fx ? { spike: 'Thorned', nova: 'Nova', amp: 'Amplified', absorb: 'Absorbing' }[it.fx] + ' ' : '') + pick(rnd, SHIELD_NAMES);
   it.value = Math.round((12 + lvl * 6) * (1 + rar * rar * 0.6)); return it;
 }
-function lootDrop(lvl, luck = 0) { return rnd() < 0.8 ? makeGun(lvl, rollRarity(luck)) : makeShield(lvl, rollRarity(luck)); }
+function lootDrop(lvl, luck = 0) { const r = rnd(); return r < 0.72 ? makeGun(lvl, rollRarity(luck)) : r < 0.9 ? makeShield(lvl, rollRarity(luck)) : makeGlim(lvl, rollRarity(luck)); }
 const gunDPS = (it) => it.dmg * it.pel * (it.leg === 'twin' ? 2 : 1) * it.rof;
 const gunAcc = (it) => clamp(Math.round(100 - it.sp * 1000), 5, 99);
 
@@ -2084,6 +2118,15 @@ function itemCard(it, cmp) {
     return `<div class="icard" style="--rc:${R.c}"><div class="ic-top"><span class="ic-name">${esc(it.name)}</span><span class="ic-lvl">LV ${it.lvl}</span></div>
       <div class="ic-sub">${R.n} ${K.n} · ${MFG[it.mfg].n}</div><div class="ic-rows">${rows.map(r => `<div><span>${r[0]}</span><b>${r[1]} ${r[2]}</b></div>`).join('')}</div>${extra}
       <div class="ic-val">${fmtInt(it.value)} cr</div></div>`;
+  }
+  if (it.type === 'glim') {
+    const G = GLIM_STYLES[it.style], hex = '#' + new THREE.Color(it.col).getHexString();
+    rows.push(['Brightness', Math.round(it.bright * 100) + '%', arrow(it.bright, c && c.bright)]);
+    rows.push(['Reach', it.reach.toFixed(1) + 'm', arrow(it.reach, c && c.reach)]);
+    rows.push(['Light', `<span style="color:${hex}">●</span> ${G.cycle ? 'Shifting' : 'Steady'}`, '']);
+    return `<div class="icard" style="--rc:${R.c}"><div class="ic-top"><span class="ic-name">${esc(it.name)}</span><span class="ic-lvl">LV ${it.lvl}</span></div>
+      <div class="ic-sub">${R.n} ${G.n} · ${MFG[it.mfg].n}</div><div class="ic-rows">${rows.map(r => `<div><span>${r[0]}</span><b>${r[1]} ${r[2]}</b></div>`).join('')}</div>
+      ${it.fx ? `<div class="ic-fx">${GLIM_FX[it.fx]}</div>` : ''}${it.flavor ? `<div class="ic-flavor">${esc(it.flavor)}</div>` : ''}<div class="ic-fx" style="color:var(--dim)">Floats over your shoulder · lights up after dark</div><div class="ic-val">${fmtInt(it.value)} cr</div></div>`;
   }
   rows.push(['Capacity', fmt(it.cap), arrow(it.cap, c && c.cap)]);
   rows.push(['Recharge delay', it.del.toFixed(1) + 's', arrow(it.del, c && c.del, false)]);
@@ -2423,6 +2466,7 @@ function dropPickup(kind, pos, o = {}) {
   if (kind === 'item') {
     const R = RARITY[it.rar];
     if (it.type === 'gun') { const gm = compactModel(buildGun(it)); gm.scale.setScalar(1.7); gm.rotation.y = Math.PI / 2; g.add(gm); }
+    else if (it.type === 'glim') { const gm = buildGlim(it); gm.scale.setScalar(4); g.add(gm); g.userData.glim = gm; }
     else { mk(gCyl(0.35, 0.35, 0.1, 6), toon(0x3a4250), g, 0, 0, 0, Math.PI / 2, 0, 0); mk(gCyl(0.25, 0.25, 0.12, 6), glowMat(R.hex), g, 0, 0, 0, Math.PI / 2, 0, 0); }
     beam = mk(gCyl(0.06, 0.06, 1, 6), glowMat(R.hex, 0.75, true), g, 0, 0, 0); beam.scale.y = 2 + it.rar * 2.2; beam.position.y = beam.scale.y / 2;
     if (it.rar >= 2) mk(gTorus(0.6, 0.04, 4, 20), glowMat(R.hex, 0.8, true), g, 0, -0.35, 0, Math.PI / 2, 0, 0);
@@ -2442,7 +2486,7 @@ function updatePickups(dt) {
       if (d < 5.5) { p.pos.lerp(_v1.copy(P.pos).setY(P.pos.y + 0.8), Math.min(1, dt * 7)); p.landed = true; }
       if (d < 1.4 && P.collect(p)) { scene.remove(p.g); disposeOwn(p.g); pickups.splice(i, 1); continue; }
     }
-    p.g.position.copy(p.pos); p.g.position.y += p.kind === 'item' ? 0.1 + Math.sin(p.t * 2) * 0.08 : Math.sin(p.t * 3) * 0.05; p.g.rotation.y += dt * 1.2;
+    p.g.position.copy(p.pos); p.g.position.y += p.kind === 'item' ? 0.1 + Math.sin(p.t * 2) * 0.08 : Math.sin(p.t * 3) * 0.05; p.g.rotation.y += dt * 1.2; if (p.g.userData.glim) p.g.userData.glim.userData.anim(p.t);
     if (p.t > 240 && p.kind !== 'item') { scene.remove(p.g); pickups.splice(i, 1); }
   }
 }
@@ -2554,6 +2598,48 @@ const VM = {
   }
 };
 
+// ---------- Glim: the light device floating over the player's shoulder ----------
+const Glim = {
+  root: null, model: null, uid: null, light: null, vmLight: null, lvl: 0, t: 0, sx: 0, sy: 0, sz: 0, lastYaw: 0, lastPitch: 0, off: new THREE.Vector3(), col: new THREE.Color(), cast: new THREE.Color(),
+  init() {
+    this.root = new THREE.Group(); scene.add(this.root);
+    this.light = new THREE.PointLight(0xffffff, 0, 16, 2); scene.add(this.light);
+    this.vmLight = new THREE.PointLight(0xffffff, 0, 2.5, 2); this.vmLight.position.set(0.55, 0.45, -0.2); vmCamera.add(this.vmLight);
+  },
+  set(it) {
+    if ((it ? it.uid : null) === this.uid) return;
+    if (this.model) { this.root.remove(this.model); this.model.userData.core.dispose(); }
+    this.model = it ? buildGlim(it) : null; if (this.model) this.root.add(this.model); this.uid = it ? it.uid : null;
+  },
+  update(dt) {
+    const it = P.glimItem, show = Game.state === 'play' && !!it && !P.dead;
+    this.root.visible = show && !(P.adsT > 0.5 && P.gun() && P.gun().kind === 'sniper');
+    if (!show) { this.light.intensity = this.vmLight.intensity = 0; return; }
+    this.set(it); this.t += dt; const t = this.t;
+    // lags behind turning and movement, then settles at the top-right edge of view
+    const dy = Math.atan2(Math.sin(P.yaw - this.lastYaw), Math.cos(P.yaw - this.lastYaw)), dp = P.pitch - this.lastPitch; this.lastYaw = P.yaw; this.lastPitch = P.pitch;
+    const fwd = -(P.vel.x * Math.sin(P.yaw) + P.vel.z * Math.cos(P.yaw)), k = Math.min(1, dt * 6);
+    this.sx = lerp(this.sx, clamp(dy * 3, -0.18, 0.18), k); this.sy = lerp(this.sy, clamp(-dp * 3 - P.vel.y * 0.01, -0.12, 0.12), k); this.sz = lerp(this.sz, clamp(fwd * 0.02, -0.12, 0.2), k);
+    const ads = clamp(P.adsT * 2, 0, 1);
+    this.off.set(0.62 + this.sx + ads * 0.35, 0.42 + this.sy + Math.sin(t * 2.1) * 0.025 + ads * 0.2, -0.75 + this.sz).applyQuaternion(camera.quaternion);
+    this.root.position.copy(camera.position).add(this.off); this.root.quaternion.copy(camera.quaternion);
+    if (this.model) this.model.userData.anim(t);
+    // switches itself on after dark and underground; T (or the inventory) turns it off
+    const dark = zone.k === 'dungeon' ? 1 : zone.lampsOn; this.lvl = lerp(this.lvl, P.glimOn ? dark : 0, Math.min(1, dt * 3));
+    const G = GLIM_STYLES[it.style]; this.col.set(it.col); if (G.cycle) this.col.offsetHSL((t * 0.05) % 1, 0, 0);
+    const fl = G.flicker ? 1 - G.flicker * Math.max(0, Math.sin(t * 13) * Math.sin(t * 4.7)) : 1;
+    if (this.model) this.model.userData.core.color.copy(this.col).multiplyScalar(0.4 + 0.45 * Math.max(this.lvl, zone.k === 'dungeon' ? 1 : 1 - zone.lampsOn));
+    // a soft warm glow: the device shows its own colour, but the light it throws leans amber and stays close
+    this.cast.copy(this.col).lerp(_warm, 0.65);
+    this.light.position.copy(this.root.position); this.light.color.copy(this.cast); this.light.distance = it.reach; this.light.intensity = it.bright * 0.4 * this.lvl * fl;
+    this.vmLight.color.copy(this.cast); this.vmLight.intensity = 0.15 * this.lvl * fl;
+  },
+  lit(e) { const it = P.glimItem; return it && this.lvl > 0.3 && e.pos.distanceTo(P.pos) < it.reach; },
+  toggle() { P.glimOn = !P.glimOn; Sfx.play('ui'); UI.feed(P.glimOn ? 'Glim on' : 'Glim off', P.glimOn ? '#ffe9a8' : '#8fa3b4'); UI.dirty = true; }
+};
+const _warm = new THREE.Color(0xffc27a);
+const equippedFor = (it) => !it ? null : it.type === 'gun' ? P.gun() : it.type === 'glim' ? P.glimItem : P.shieldItem;
+
 // ===================== PLAYER =====================
 const xpNeed = (L) => Math.round(80 * Math.pow(L, 1.35) + 40);
 const P = {
@@ -2569,12 +2655,12 @@ const P = {
     const mf = faction === 'corp' ? 'cyrex' : faction === 'clan' ? 'clanforge' : 'dustline';
     const kit = { soldier: ['rifle', 'pistol'], nanocaster: ['smg', 'pistol'], engineer: ['shotgun', 'pistol'], agent: ['sniper', 'pistol'], doctor: ['smg', 'pistol'] }[prof];
     this.weapons[0] = makeGun(1, 1, kit[0], prof === 'nanocaster' ? 'nanodyne' : MFG[mf].kinds.includes(kit[0]) ? mf : undefined); this.weapons[1] = makeGun(1, 0, kit[1], mf);
-    this.shieldItem = makeShield(1, 0); this.weapons.forEach(w => w && (w.cur = w.mag));
+    this.shieldItem = makeShield(1, 0); this.glimItem = makeGlim(1, 0, 'orb'); this.glimOn = true; this.weapons.forEach(w => w && (w.cur = w.mag));
     this.resetRuntime(); this.recalc(); this.hp = this.maxHp; this.sh = this.maxSh; this.nano = this.maxNano;
   },
   resetRuntime() { Object.assign(this, { fireCd: 0, reloadT: 0, reloadMax: 1, bloom: 0, adsT: 0, sprint: false, skillCd: 0, overdrive: 0, cloak: 0, cloakCrit: false, regenField: 0, downed: false, downT: 0, dead: false, hurtT: 0, shake: 0, recoil: 0, shDelayT: 0, calmT: 0, meleeCd: 0, godT: 0, booth: null, inWater: false, moving: false, regenT: 0 }); this.vel.set(0, 0, 0); },
-  serialize() { const s = {}; for (const k of ['name', 'faction', 'prof', 'level', 'xp', 'credits', 'attrs', 'pts', 'weapons', 'cur', 'pack', 'packMax', 'ammo', 'grenades', 'discovered', 'quest', 'mission', 'missionsDone', 'kills', 'bosses', 'zone', 'reclaim', 'shieldItem', 'offers', 'playTime', 'finished']) s[k] = this[k]; s.hp = this.hp; s.sh = this.sh; return JSON.parse(JSON.stringify(s)); },
-  load(s) { Object.assign(this, s); if (!this.discovered.includes('jovan')) this.discovered.push('jovan'); this.resetRuntime(); this.recalc(); this.hp = clamp(s.hp || this.maxHp, 1, this.maxHp); this.sh = this.maxSh; this.nano = this.maxNano; },
+  serialize() { const s = {}; for (const k of ['name', 'faction', 'prof', 'level', 'xp', 'credits', 'attrs', 'pts', 'weapons', 'cur', 'pack', 'packMax', 'ammo', 'grenades', 'discovered', 'quest', 'mission', 'missionsDone', 'kills', 'bosses', 'zone', 'reclaim', 'shieldItem', 'glimItem', 'glimOn', 'offers', 'playTime', 'finished']) s[k] = this[k]; s.hp = this.hp; s.sh = this.sh; return JSON.parse(JSON.stringify(s)); },
+  load(s) { Object.assign(this, s); if (!this.discovered.includes('jovan')) this.discovered.push('jovan'); if (!this.glimItem && !this.pack.some(p => p.type === 'glim')) this.glimItem = makeGlim(1, 0, 'orb'); if (this.glimOn === undefined) this.glimOn = true; this.resetRuntime(); this.recalc(); this.hp = clamp(s.hp || this.maxHp, 1, this.maxHp); this.sh = this.maxSh; this.nano = this.maxNano; },
   recalc() {
     const pr = PROFESSIONS[this.prof], A = this.attrs;
     this.maxHp = 100 * S(this.level) * (1 + A.sta * 0.03 + A.str * 0.02) * (pr.hp || 1);
@@ -2727,6 +2813,7 @@ const P = {
     for (let i = 0; i < 4; i++) if (pr2.has('Digit' + (i + 1))) this.setWeapon(i);
     if (Input.wheel) { this.cycleWeapon(Input.wheel > 0 ? 1 : -1); Input.wheel = 0; }
     if (pr2.has('KeyE')) Game.interact();
+    if (pr2.has('KeyT') && this.glimItem) Glim.toggle();
     // movement
     const sp = 8.2 * this.spdMul * (this.sprint ? 1.55 : 1) * (this.adsT > 0.5 ? 0.6 : 1) * (this.downed ? 0.22 : 1) * (this.inWater ? 0.65 : 1) * (this.overdrive > 0 ? 1.1 : 1);
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw), rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
@@ -2772,6 +2859,7 @@ function dealDamage(e, base, el, crit, point, o = {}) {
   if (el !== 'kinetic') dmg *= P.elMul;
   if (P.overdrive > 0) dmg *= 1.25;
   if (P.shieldItem && P.shieldItem.fx === 'amp' && P.sh >= P.maxSh * 0.99) dmg *= 1.2;
+  if (P.glimItem && P.glimItem.fx === 'expose' && Glim.lit(e)) dmg *= 1.1;
   const wasDead = e.dead; const dealt = e.hurt(dmg, el, crit, point, o);
   if (!o.noProc && el !== 'kinetic' && o.src && !e.dead) { const ch = (o.src.elc || 0) * (1 + P.elChance); if (rnd() < ch * (o.splash ? 0.6 : 1)) proc(e, el, base * (crit ? 1.5 : 1)); }
   if (o.src && o.src.leg === 'leech') P.heal(dealt * 0.06);
@@ -2856,7 +2944,7 @@ const UI = {
     this.compass();
     // prompt / loot card
     const ni = Game.nearestInteract(); const pe = $('prompt'), lc = $('lootCard');
-    if (ni && ni.type === 'pickup') { pe.hidden = true; lc.hidden = false; if (lc.dataset.uid !== ni.p.item.uid) { lc.dataset.uid = ni.p.item.uid; const cmp = ni.p.item.type === 'gun' ? P.gun() : P.shieldItem; lc.innerHTML = itemCard(ni.p.item, cmp) + `<div class="pick-hint"><kbd>${isTouch ? 'USE' : 'E'}</kbd> Pick up</div>`; } }
+    if (ni && ni.type === 'pickup') { pe.hidden = true; lc.hidden = false; if (lc.dataset.uid !== ni.p.item.uid) { lc.dataset.uid = ni.p.item.uid; const cmp = equippedFor(ni.p.item); lc.innerHTML = itemCard(ni.p.item, cmp) + `<div class="pick-hint"><kbd>${isTouch ? 'USE' : 'E'}</kbd> Pick up</div>`; } }
     else { lc.hidden = true; lc.dataset.uid = ''; if (ni) { pe.hidden = false; pe.innerHTML = `<kbd>${isTouch ? 'USE' : 'E'}</kbd>${ni.i.label}`; } else pe.hidden = true; }
     if (isTouch) $('tUse').hidden = !ni;
     // target
@@ -2934,17 +3022,18 @@ const UI = {
   row(it, attrs, key, extra = '') {
     if (!it) return `<div class="irow empty" ${attrs}><span class="k">${key || ''}</span><span class="n">Empty</span></div>`;
     const sel = this.sel && attrs.includes(`data-${this.sel.w}="${this.sel.i}"`) ? 'sel' : '';
-    const meta = it.type === 'gun' ? `${KINDS[it.kind].n} · ${fmt(it.dmg)}${it.pel > 1 ? '×' + it.pel : ''} · LV ${it.lvl}` : `Shield · ${fmt(it.cap)} · LV ${it.lvl}`;
+    const meta = it.type === 'gun' ? `${KINDS[it.kind].n} · ${fmt(it.dmg)}${it.pel > 1 ? '×' + it.pel : ''} · LV ${it.lvl}` : it.type === 'glim' ? `Glim · ${it.reach.toFixed(0)}m light · LV ${it.lvl}` : `Shield · ${fmt(it.cap)} · LV ${it.lvl}`;
     return `<div class="irow ${sel}" style="--rc:${RARITY[it.rar].c}" ${attrs}><span class="k">${key || ''}</span><span class="nm"><span class="n">${esc(it.name)}${it.el && it.el !== 'kinetic' ? ` <span style="color:${ELEMENTS[it.el].c}">●</span>` : ''}</span><span class="m">${meta}${extra}</span></span></div>`;
   },
-  selItem() { const s = this.sel; if (!s) return null; if (s.w === 'w') return P.weapons[s.i]; if (s.w === 's') return P.shieldItem; if (s.w === 'p') return P.pack[s.i]; if (s.w === 'b') return this.ctx.stock && this.ctx.stock[s.i]; return null; },
+  selItem() { const s = this.sel; if (!s) return null; if (s.w === 'w') return P.weapons[s.i]; if (s.w === 's') return P.shieldItem; if (s.w === 'g') return P.glimItem; if (s.w === 'p') return P.pack[s.i]; if (s.w === 'b') return this.ctx.stock && this.ctx.stock[s.i]; return null; },
   renderInv() {
     const it = this.selItem(); const s = this.sel; let acts = '';
-    if (it && s.w === 'p') { if (it.type === 'gun') acts += [0, 1, 2, 3].map(i => `<button class="btn small" data-act="equip" data-slot="${i}">Equip → ${i + 1}</button>`).join(''); else acts += `<button class="btn small" data-act="equipShield">Equip shield</button>`; acts += `<button class="btn small" data-act="drop">Drop</button>`; if (this.ctx.vendor) acts += `<button class="btn small primary" data-act="sell">Sell ${fmtInt(it.value)} cr</button>`; }
+    if (it && s.w === 'p') { if (it.type === 'gun') acts += [0, 1, 2, 3].map(i => `<button class="btn small" data-act="equip" data-slot="${i}">Equip → ${i + 1}</button>`).join(''); else if (it.type === 'glim') acts += `<button class="btn small" data-act="equipGlim">Equip glim</button>`; else acts += `<button class="btn small" data-act="equipShield">Equip shield</button>`; acts += `<button class="btn small" data-act="drop">Drop</button>`; if (this.ctx.vendor) acts += `<button class="btn small primary" data-act="sell">Sell ${fmtInt(it.value)} cr</button>`; }
+    if (it && s.w === 'g') acts += `<button class="btn small" data-act="glimToggle">${P.glimOn ? 'Turn light off' : 'Turn light on'}</button>`;
     if (it && s.w === 'w') { acts += `<button class="btn small" data-act="active">Make active</button><button class="btn small" data-act="unequip">Move to backpack</button>`; }
-    const cmp = it ? (it.type === 'gun' ? (s.w === 'w' ? null : P.gun()) : (s.w === 's' ? null : P.shieldItem)) : null;
+    const cmp = it && s.w !== 'w' && s.w !== 's' && s.w !== 'g' ? equippedFor(it) : null;
     $('pnBody').innerHTML = `<div class="inv">
-      <div><h3>Equipped <span>${fmtInt(P.credits)} cr</span></h3>${P.weapons.map((w, i) => this.row(w, `data-w="${i}"`, i + 1, i === P.cur ? ' · active' : '')).join('')}${this.row(P.shieldItem, 'data-s="0"', '◆')}
+      <div><h3>Equipped <span>${fmtInt(P.credits)} cr</span></h3>${P.weapons.map((w, i) => this.row(w, `data-w="${i}"`, i + 1, i === P.cur ? ' · active' : '')).join('')}${this.row(P.shieldItem, 'data-s="0"', '◆')}${this.row(P.glimItem, 'data-g="0"', '✦', P.glimItem ? (P.glimOn ? ' · auto' : ' · off') : '')}
         <h3 style="margin-top:14px">Ammo <span>Grenades ${P.grenades}</span></h3><div class="stats2">${Object.keys(AMMO).map(k => `<div class="stat"><span>${AMMO[k].n}</span><b>${P.ammo[k]} / ${AMMO[k].max}</b></div>`).join('')}</div></div>
       <div><h3>Backpack <span>${P.pack.length} / ${P.packMax}</span></h3>${P.pack.length ? P.pack.map((p, i) => this.row(p, `data-p="${i}"`, '')).join('') : '<div class="irow empty">Nothing yet. Loot drops, chests and vendors fill this.</div>'}</div>
       <div>${it ? itemCard(it, cmp) + `<div class="acts">${acts}</div>` : '<h3>Select an item</h3><p style="color:var(--dim);font-size:13px">Tap any item to compare it with what you have equipped. Green arrows are upgrades.</p>'}</div></div>`;
@@ -2970,7 +3059,7 @@ const UI = {
     const c = this.ctx; const it = this.selItem(); const s = this.sel;
     if (c.vendor === 'arms') {
       let acts = ''; if (it && s.w === 'b') acts = `<button class="btn small primary" data-act="buy" ${P.credits >= it.value * 2.5 ? '' : 'disabled'}>Buy ${fmtInt(it.value * 2.5)} cr</button>`; if (it && s.w === 'p') acts = `<button class="btn small primary" data-act="sell">Sell ${fmtInt(it.value)} cr</button>`;
-      const cmp = it ? (it.type === 'gun' ? P.gun() : P.shieldItem) : null;
+      const cmp = equippedFor(it);
       $('pnBody').innerHTML = `<div class="shop"><div><h3>For sale <span>${fmtInt(P.credits)} cr</span></h3>${c.stock.map((x, i) => x ? this.row(x, `data-b="${i}"`, '', ` · ${fmtInt(x.value * 2.5)} cr`) : '').join('')}
         <h3 style="margin-top:14px">Sell from backpack</h3>${P.pack.length ? P.pack.map((p, i) => this.row(p, `data-p="${i}"`, '', ` · ${fmtInt(p.value)} cr`)).join('') : '<div class="irow empty">Backpack is empty</div>'}</div>
         <div>${it ? itemCard(it, cmp) + `<div class="acts">${acts}</div>` : '<h3>Select an item</h3>'}</div></div>`;
@@ -2995,7 +3084,7 @@ const UI = {
       <div class="set"><label for="sQ">Render quality</label><input type="range" id="sQ" min="0" max="2" step="1" value="${GFX.quality}"><output>${QUALITY[GFX.quality].name}</output></div>
       <div class="set"><label for="sDay">Day length</label><input type="range" id="sDay" min="0" max="${DAY_LENS.length - 1}" step="1" value="${DayClock.len}"><output>${DAY_LENS[DayClock.len].name}</output></div>
       <div class="set"><label for="sInv">Invert look</label><input type="checkbox" id="sInv" ${SENS.invert ? 'checked' : ''}><output></output></div>
-      </div><div><h3>Controls</h3><div class="keys">${[['Move', 'WASD'], ['Look', 'Mouse'], ['Fire', 'LMB'], ['Aim down sights', 'RMB'], ['Jump', 'Space'], ['Sprint', 'Shift'], ['Reload', 'R'], ['Profession skill', 'Q'], ['Grenade', 'G'], ['Melee', 'V'], ['Interact / pick up', 'E'], ['Weapons', '1-4 / Wheel'], ['Inventory', 'Tab / I'], ['Atlas', 'M'], ['Menu', 'Esc / P']].map(([a, b]) => `<div><span>${a}</span><kbd>${b}</kbd></div>`).join('')}</div>
+      </div><div><h3>Controls</h3><div class="keys">${[['Move', 'WASD'], ['Look', 'Mouse'], ['Fire', 'LMB'], ['Aim down sights', 'RMB'], ['Jump', 'Space'], ['Sprint', 'Shift'], ['Reload', 'R'], ['Profession skill', 'Q'], ['Grenade', 'G'], ['Melee', 'V'], ['Interact / pick up', 'E'], ['Shoulder light', 'T'], ['Weapons', '1-4 / Wheel'], ['Inventory', 'Tab / I'], ['Atlas', 'M'], ['Menu', 'Esc / P']].map(([a, b]) => `<div><span>${a}</span><kbd>${b}</kbd></div>`).join('')}</div>
       <p style="font-size:12px;color:var(--dim);line-height:1.5;margin-top:12px">On touch screens: drag the left side to move (push to the top edge to sprint), drag the right side to look, and use the on-screen buttons. Progress saves automatically in this browser.</p>
       ${fromTitle ? '' : `<h3 style="margin-top:14px">Danger zone</h3><button class="btn small" data-act="wipe">Delete save and restart</button><span id="wipeConfirm"></span>`}</div></div>`;
   },
@@ -3007,14 +3096,16 @@ const UI = {
     else if (t.id === 'sDay') { DayClock.setLen(v); out.textContent = DAY_LENS[v].name; }
   },
   onPanelClick(e) {
-    const r = e.target.closest('[data-w],[data-p],[data-s],[data-b]'); const a = e.target.closest('[data-act]');
+    const r = e.target.closest('[data-w],[data-p],[data-s],[data-g],[data-b]'); const a = e.target.closest('[data-act]');
     if (a) { this.act(a.dataset.act, a.dataset); return; }
-    if (r && !r.classList.contains('empty')) { Sfx.play('ui'); const k = ['w', 'p', 's', 'b'].find(x => r.dataset[x] !== undefined); this.sel = { w: k, i: +r.dataset[k] }; this.showTab(this.tab); }
+    if (r && !r.classList.contains('empty')) { Sfx.play('ui'); const k = ['w', 'p', 's', 'g', 'b'].find(x => r.dataset[x] !== undefined); this.sel = { w: k, i: +r.dataset[k] }; this.showTab(this.tab); }
   },
   act(act, d) {
     const s = this.sel; const it = this.selItem(); Sfx.play('ui');
     switch (act) {
       case 'equip': { const slot = +d.slot; const old = P.weapons[slot]; P.weapons[slot] = it; P.pack.splice(s.i, 1); if (old) P.pack.push(old); if (it.cur == null) it.cur = P.magSize(it); if (slot === P.cur || !old) { VM.set(P.weapons[P.cur]); } this.sel = null; break; }
+      case 'equipGlim': { const old = P.glimItem; P.glimItem = it; P.pack.splice(s.i, 1); if (old) P.pack.push(old); this.sel = null; break; }
+      case 'glimToggle': Glim.toggle(); break;
       case 'equipShield': { const old = P.shieldItem; P.shieldItem = it; P.pack.splice(s.i, 1); if (old) P.pack.push(old); P.recalc(); P.sh = Math.min(P.sh, P.maxSh); this.sel = null; break; }
       case 'drop': P.pack.splice(s.i, 1); this.pendingDrops.push(it); this.sel = null; break;
       case 'sell': P.credits += it.value; P.pack.splice(s.i, 1); Sfx.play('credits'); this.sel = null; break;
@@ -3087,12 +3178,13 @@ const TIPS = [
   'Red chests hold loot. Purple Vyrium Caches hold better loot.',
   'Badass enemies glow amber. They hit harder and drop better guns.',
   'Spend attribute points in Inventory › Stats after you level up.',
+  'Your Glim floats over your shoulder and lights up after dark. Press T to switch it off. Better ones drop from loot or sell at Arms Vendors.',
 ];
 const Game = {
   state: 'boot', panel: null, t: 0, saveT: 0, clock: null, gateLock: 0, titleT: 0,
   boot() {
     initRenderer();
-    FXg = new Particles(1600, true); FXi = new Particles(1000, false); Tracers.init(); DmgNums.init(); VM.init();
+    FXg = new Particles(1600, true); FXi = new Particles(1000, false); Tracers.init(); DmgNums.init(); VM.init(); Glim.init();
     enemyRoot = new THREE.Group(); scene.add(enemyRoot);
     initInput(); if (isTouch) initTouch(); UI.init();
     const hd = window.claude && window.claude.hot && window.claude.hot.data; if (hd && hd.save) Store.set('save', hd.save);
@@ -3160,7 +3252,7 @@ const Game = {
     for (let k = 0; k < ri(rnd, 1, 3); k++) dropPickup('credits', c, { amount: Math.round((6 + L * 4) * rr(rnd, 0.7, 1.5) * (i.rare ? 2 : 1)) });
     if (rnd() < 0.6) dropPickup('ammo', c); FXg.burst(c, 24, i.rare ? 0xc26bff : 0xffc23a, 5, 0.3, 0.6);
   },
-  vendorStock(kind) { if (kind !== 'arms') return null; const L = P.level; const s = []; for (let i = 0; i < 7; i++) s.push(makeGun(L + ri(rnd, -1, 1), rollRarity(1.5))); s.push(makeShield(L, rollRarity(1.5)), makeShield(L, rollRarity(1))); s.push(makeGun(L + 1, rnd() < 0.15 ? 4 : 3)); return s; },
+  vendorStock(kind) { if (kind !== 'arms') return null; const L = P.level; const s = []; for (let i = 0; i < 7; i++) s.push(makeGun(L + ri(rnd, -1, 1), rollRarity(1.5))); s.push(makeShield(L, rollRarity(1.5)), makeShield(L, rollRarity(1)), makeGlim(L, rollRarity(1.5)), makeGlim(L, Math.max(1, rollRarity(2)))); s.push(makeGun(L + 1, rnd() < 0.15 ? 4 : 3)); return s; },
   // ---------- missions ----------
   genOffers() {
     let cand = ZONES.filter(z => (z.k === 'wild' || z.k === 'island' || z.k === 'veil') && z.l[0] <= P.level + 3 && z.l[1] >= P.level - 6 && z.id !== 'landfall');
@@ -3236,6 +3328,7 @@ const Game = {
     }
     postMat.uniforms.flash.value = Math.max(0, postMat.uniforms.flash.value - dt * 1.5);
     if (zone) zone.update(t);
+    Glim.update(dt);
     FXg.update(dt); FXi.update(dt); Tracers.update(dt); DmgNums.update(dt); Music.update();
     Input.pressed.clear();
     renderFrame(t);
@@ -3244,7 +3337,7 @@ const Game = {
 window.addEventListener('beforeunload', () => Game.save());
 document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(); });
 Game.boot();
-window.__vy = { Game, P, DayClock, get zone() { return zone; }, enemies, pickups, ZONES, Zone, UI, get renderer() { return renderer; }, GFX, Input, makeGun, makeShield, dropPickup };
+window.__vy = { Game, P, DayClock, Glim, makeGlim, get zone() { return zone; }, enemies, pickups, ZONES, Zone, UI, get renderer() { return renderer; }, GFX, Input, makeGun, makeShield, dropPickup };
 
 })();
 </script>

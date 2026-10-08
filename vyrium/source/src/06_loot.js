@@ -59,6 +59,27 @@ const SHIELD_MFG = { cyrex: { cap: 1.15, del: 1.0, rate: 1.0 }, clanforge: { cap
 const SHIELD_FX = { spike: 'Melee attackers take heavy damage', nova: 'Releases a shock nova when broken', amp: 'Gun damage +20% while shield is full', absorb: '25% chance to turn enemy bullets into ammo' };
 const SHIELD_NAMES = ['Bulwark', 'Aegis', 'Carapace', 'Ward', 'Halo', 'Bastion', 'Mantle'];
 
+// Glims: light devices that float over the player's shoulder. Style sets the look; rarity sets brightness and reach.
+const GLIM_STYLES = {
+  orb: { n: 'Lumen Orb', mfg: 'dustline', cols: [0xfff0d0, 0xd8f4ff], minR: 0, txt: 'A lamp with opinions about where you are going.' },
+  lantern: { n: 'Lantern', mfg: 'clanforge', cols: [0xffb050, 0xff8a3a], minR: 0, flicker: 0.12, txt: 'Clan glasswork. It swings when you run.' },
+  halo: { n: 'Halo Core', mfg: 'cyrex', cols: [0x4fd6ff, 0x7ae0ff, 0xff3ad0], minR: 1, txt: 'Two rings, one core, zero warranty.' },
+  drone: { n: 'Spotter Drone', mfg: 'vektor', cols: [0xffffff, 0xc8f0ff, 0x9be37a], minR: 1, txt: 'Four rotors and a floodlight. Hums when it is happy.' },
+  prism: { n: 'Prism Shard', mfg: 'helix', cols: [0xff5ab0, 0x7a5aff, 0x3affd0], minR: 2, cycle: true, txt: 'Bends light into colours that do not have names yet.' },
+  wisp: { n: 'Veil Wisp', mfg: 'nanodyne', cols: [0xc26bff, 0x3affd0, 0xffd27a], minR: 3, txt: 'It followed someone out of a rift. Now it follows you.' },
+};
+const GLIM_PREFIX = ['Basic', 'Tuned', 'Bright', 'Radiant'];
+const GLIM_LEG = ['Little Sun', 'Second Moon', "Marr's Lamp", 'Night Owl'];
+function makeGlim(lvl, rar, style) {
+  lvl = clamp(Math.round(lvl), 1, 72); if (rar == null) rar = rollRarity();
+  style = style || pick(rnd, Object.keys(GLIM_STYLES).filter(k => GLIM_STYLES[k].minR <= rar)); const G = GLIM_STYLES[style], v = () => rr(rnd, 0.94, 1.06);
+  const it = { uid: uid(), type: 'glim', style, mfg: G.mfg, lvl, rar, col: rar ? pick(rnd, G.cols) : G.cols[0], bright: (1 + rar * 0.22) * v(), reach: (6 + rar * 1.5) * v(), fx: null };
+  if (rar === 4) { it.fx = 'expose'; it.name = pick(rnd, GLIM_LEG); it.flavor = 'Things that hide from light hate this one.'; }
+  else { it.name = `${GLIM_PREFIX[rar]} ${G.n}`; it.flavor = G.txt; }
+  it.value = Math.round((10 + lvl * 5) * (1 + rar * rar * 0.6)); return it;
+}
+const GLIM_FX = { expose: 'Enemies inside its light take +10% damage' };
+
 function rollRarity(luck = 0) { return wpick(rnd, [[0, Math.max(10, 60 - luck * 6)], [1, 25], [2, 9 + luck * 1.5], [3, 3.2 + luck * 0.9], [4, 0.75 + luck * 0.4]]); }
 function makeGun(lvl, rar, kind, mfg) {
   lvl = clamp(Math.round(lvl), 1, 72); if (rar == null) rar = rollRarity();
@@ -85,7 +106,7 @@ function makeShield(lvl, rar) {
   it.name = (it.fx ? { spike: 'Thorned', nova: 'Nova', amp: 'Amplified', absorb: 'Absorbing' }[it.fx] + ' ' : '') + pick(rnd, SHIELD_NAMES);
   it.value = Math.round((12 + lvl * 6) * (1 + rar * rar * 0.6)); return it;
 }
-function lootDrop(lvl, luck = 0) { return rnd() < 0.8 ? makeGun(lvl, rollRarity(luck)) : makeShield(lvl, rollRarity(luck)); }
+function lootDrop(lvl, luck = 0) { const r = rnd(); return r < 0.72 ? makeGun(lvl, rollRarity(luck)) : r < 0.9 ? makeShield(lvl, rollRarity(luck)) : makeGlim(lvl, rollRarity(luck)); }
 const gunDPS = (it) => it.dmg * it.pel * (it.leg === 'twin' ? 2 : 1) * it.rof;
 const gunAcc = (it) => clamp(Math.round(100 - it.sp * 1000), 5, 99);
 
@@ -110,6 +131,15 @@ function itemCard(it, cmp) {
     return `<div class="icard" style="--rc:${R.c}"><div class="ic-top"><span class="ic-name">${esc(it.name)}</span><span class="ic-lvl">LV ${it.lvl}</span></div>
       <div class="ic-sub">${R.n} ${K.n} · ${MFG[it.mfg].n}</div><div class="ic-rows">${rows.map(r => `<div><span>${r[0]}</span><b>${r[1]} ${r[2]}</b></div>`).join('')}</div>${extra}
       <div class="ic-val">${fmtInt(it.value)} cr</div></div>`;
+  }
+  if (it.type === 'glim') {
+    const G = GLIM_STYLES[it.style], hex = '#' + new THREE.Color(it.col).getHexString();
+    rows.push(['Brightness', Math.round(it.bright * 100) + '%', arrow(it.bright, c && c.bright)]);
+    rows.push(['Reach', it.reach.toFixed(1) + 'm', arrow(it.reach, c && c.reach)]);
+    rows.push(['Light', `<span style="color:${hex}">●</span> ${G.cycle ? 'Shifting' : 'Steady'}`, '']);
+    return `<div class="icard" style="--rc:${R.c}"><div class="ic-top"><span class="ic-name">${esc(it.name)}</span><span class="ic-lvl">LV ${it.lvl}</span></div>
+      <div class="ic-sub">${R.n} ${G.n} · ${MFG[it.mfg].n}</div><div class="ic-rows">${rows.map(r => `<div><span>${r[0]}</span><b>${r[1]} ${r[2]}</b></div>`).join('')}</div>
+      ${it.fx ? `<div class="ic-fx">${GLIM_FX[it.fx]}</div>` : ''}${it.flavor ? `<div class="ic-flavor">${esc(it.flavor)}</div>` : ''}<div class="ic-fx" style="color:var(--dim)">Floats over your shoulder · lights up after dark</div><div class="ic-val">${fmtInt(it.value)} cr</div></div>`;
   }
   rows.push(['Capacity', fmt(it.cap), arrow(it.cap, c && c.cap)]);
   rows.push(['Recharge delay', it.del.toFixed(1) + 's', arrow(it.del, c && c.del, false)]);

@@ -328,6 +328,7 @@ function dropPickup(kind, pos, o = {}) {
   if (kind === 'item') {
     const R = RARITY[it.rar];
     if (it.type === 'gun') { const gm = compactModel(buildGun(it)); gm.scale.setScalar(1.7); gm.rotation.y = Math.PI / 2; g.add(gm); }
+    else if (it.type === 'glim') { const gm = buildGlim(it); gm.scale.setScalar(4); g.add(gm); g.userData.glim = gm; }
     else { mk(gCyl(0.35, 0.35, 0.1, 6), toon(0x3a4250), g, 0, 0, 0, Math.PI / 2, 0, 0); mk(gCyl(0.25, 0.25, 0.12, 6), glowMat(R.hex), g, 0, 0, 0, Math.PI / 2, 0, 0); }
     beam = mk(gCyl(0.06, 0.06, 1, 6), glowMat(R.hex, 0.75, true), g, 0, 0, 0); beam.scale.y = 2 + it.rar * 2.2; beam.position.y = beam.scale.y / 2;
     if (it.rar >= 2) mk(gTorus(0.6, 0.04, 4, 20), glowMat(R.hex, 0.8, true), g, 0, -0.35, 0, Math.PI / 2, 0, 0);
@@ -347,7 +348,7 @@ function updatePickups(dt) {
       if (d < 5.5) { p.pos.lerp(_v1.copy(P.pos).setY(P.pos.y + 0.8), Math.min(1, dt * 7)); p.landed = true; }
       if (d < 1.4 && P.collect(p)) { scene.remove(p.g); disposeOwn(p.g); pickups.splice(i, 1); continue; }
     }
-    p.g.position.copy(p.pos); p.g.position.y += p.kind === 'item' ? 0.1 + Math.sin(p.t * 2) * 0.08 : Math.sin(p.t * 3) * 0.05; p.g.rotation.y += dt * 1.2;
+    p.g.position.copy(p.pos); p.g.position.y += p.kind === 'item' ? 0.1 + Math.sin(p.t * 2) * 0.08 : Math.sin(p.t * 3) * 0.05; p.g.rotation.y += dt * 1.2; if (p.g.userData.glim) p.g.userData.glim.userData.anim(p.t);
     if (p.t > 240 && p.kind !== 'item') { scene.remove(p.g); pickups.splice(i, 1); }
   }
 }

@@ -9,12 +9,13 @@ const TIPS = [
   'Red chests hold loot. Purple Vyrium Caches hold better loot.',
   'Badass enemies glow amber. They hit harder and drop better guns.',
   'Spend attribute points in Inventory › Stats after you level up.',
+  'Your Glim floats over your shoulder and lights up after dark. Press T to switch it off. Better ones drop from loot or sell at Arms Vendors.',
 ];
 const Game = {
   state: 'boot', panel: null, t: 0, saveT: 0, clock: null, gateLock: 0, titleT: 0,
   boot() {
     initRenderer();
-    FXg = new Particles(1600, true); FXi = new Particles(1000, false); Tracers.init(); DmgNums.init(); VM.init();
+    FXg = new Particles(1600, true); FXi = new Particles(1000, false); Tracers.init(); DmgNums.init(); VM.init(); Glim.init();
     enemyRoot = new THREE.Group(); scene.add(enemyRoot);
     initInput(); if (isTouch) initTouch(); UI.init();
     const hd = window.claude && window.claude.hot && window.claude.hot.data; if (hd && hd.save) Store.set('save', hd.save);
@@ -82,7 +83,7 @@ const Game = {
     for (let k = 0; k < ri(rnd, 1, 3); k++) dropPickup('credits', c, { amount: Math.round((6 + L * 4) * rr(rnd, 0.7, 1.5) * (i.rare ? 2 : 1)) });
     if (rnd() < 0.6) dropPickup('ammo', c); FXg.burst(c, 24, i.rare ? 0xc26bff : 0xffc23a, 5, 0.3, 0.6);
   },
-  vendorStock(kind) { if (kind !== 'arms') return null; const L = P.level; const s = []; for (let i = 0; i < 7; i++) s.push(makeGun(L + ri(rnd, -1, 1), rollRarity(1.5))); s.push(makeShield(L, rollRarity(1.5)), makeShield(L, rollRarity(1))); s.push(makeGun(L + 1, rnd() < 0.15 ? 4 : 3)); return s; },
+  vendorStock(kind) { if (kind !== 'arms') return null; const L = P.level; const s = []; for (let i = 0; i < 7; i++) s.push(makeGun(L + ri(rnd, -1, 1), rollRarity(1.5))); s.push(makeShield(L, rollRarity(1.5)), makeShield(L, rollRarity(1)), makeGlim(L, rollRarity(1.5)), makeGlim(L, Math.max(1, rollRarity(2)))); s.push(makeGun(L + 1, rnd() < 0.15 ? 4 : 3)); return s; },
   // ---------- missions ----------
   genOffers() {
     let cand = ZONES.filter(z => (z.k === 'wild' || z.k === 'island' || z.k === 'veil') && z.l[0] <= P.level + 3 && z.l[1] >= P.level - 6 && z.id !== 'landfall');
@@ -158,6 +159,7 @@ const Game = {
     }
     postMat.uniforms.flash.value = Math.max(0, postMat.uniforms.flash.value - dt * 1.5);
     if (zone) zone.update(t);
+    Glim.update(dt);
     FXg.update(dt); FXi.update(dt); Tracers.update(dt); DmgNums.update(dt); Music.update();
     Input.pressed.clear();
     renderFrame(t);
@@ -166,4 +168,4 @@ const Game = {
 window.addEventListener('beforeunload', () => Game.save());
 document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(); });
 Game.boot();
-window.__vy = { Game, P, DayClock, get zone() { return zone; }, enemies, pickups, ZONES, Zone, UI, get renderer() { return renderer; }, GFX, Input, makeGun, makeShield, dropPickup };
+window.__vy = { Game, P, DayClock, Glim, makeGlim, get zone() { return zone; }, enemies, pickups, ZONES, Zone, UI, get renderer() { return renderer; }, GFX, Input, makeGun, makeShield, dropPickup };

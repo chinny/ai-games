@@ -65,7 +65,7 @@ const UI = {
     this.compass();
     // prompt / loot card
     const ni = Game.nearestInteract(); const pe = $('prompt'), lc = $('lootCard');
-    if (ni && ni.type === 'pickup') { pe.hidden = true; lc.hidden = false; if (lc.dataset.uid !== ni.p.item.uid) { lc.dataset.uid = ni.p.item.uid; const cmp = ni.p.item.type === 'gun' ? P.gun() : P.shieldItem; lc.innerHTML = itemCard(ni.p.item, cmp) + `<div class="pick-hint"><kbd>${isTouch ? 'USE' : 'E'}</kbd> Pick up</div>`; } }
+    if (ni && ni.type === 'pickup') { pe.hidden = true; lc.hidden = false; if (lc.dataset.uid !== ni.p.item.uid) { lc.dataset.uid = ni.p.item.uid; const cmp = equippedFor(ni.p.item); lc.innerHTML = itemCard(ni.p.item, cmp) + `<div class="pick-hint"><kbd>${isTouch ? 'USE' : 'E'}</kbd> Pick up</div>`; } }
     else { lc.hidden = true; lc.dataset.uid = ''; if (ni) { pe.hidden = false; pe.innerHTML = `<kbd>${isTouch ? 'USE' : 'E'}</kbd>${ni.i.label}`; } else pe.hidden = true; }
     if (isTouch) $('tUse').hidden = !ni;
     // target
@@ -143,17 +143,18 @@ const UI = {
   row(it, attrs, key, extra = '') {
     if (!it) return `<div class="irow empty" ${attrs}><span class="k">${key || ''}</span><span class="n">Empty</span></div>`;
     const sel = this.sel && attrs.includes(`data-${this.sel.w}="${this.sel.i}"`) ? 'sel' : '';
-    const meta = it.type === 'gun' ? `${KINDS[it.kind].n} · ${fmt(it.dmg)}${it.pel > 1 ? '×' + it.pel : ''} · LV ${it.lvl}` : `Shield · ${fmt(it.cap)} · LV ${it.lvl}`;
+    const meta = it.type === 'gun' ? `${KINDS[it.kind].n} · ${fmt(it.dmg)}${it.pel > 1 ? '×' + it.pel : ''} · LV ${it.lvl}` : it.type === 'glim' ? `Glim · ${it.reach.toFixed(0)}m light · LV ${it.lvl}` : `Shield · ${fmt(it.cap)} · LV ${it.lvl}`;
     return `<div class="irow ${sel}" style="--rc:${RARITY[it.rar].c}" ${attrs}><span class="k">${key || ''}</span><span class="nm"><span class="n">${esc(it.name)}${it.el && it.el !== 'kinetic' ? ` <span style="color:${ELEMENTS[it.el].c}">●</span>` : ''}</span><span class="m">${meta}${extra}</span></span></div>`;
   },
-  selItem() { const s = this.sel; if (!s) return null; if (s.w === 'w') return P.weapons[s.i]; if (s.w === 's') return P.shieldItem; if (s.w === 'p') return P.pack[s.i]; if (s.w === 'b') return this.ctx.stock && this.ctx.stock[s.i]; return null; },
+  selItem() { const s = this.sel; if (!s) return null; if (s.w === 'w') return P.weapons[s.i]; if (s.w === 's') return P.shieldItem; if (s.w === 'g') return P.glimItem; if (s.w === 'p') return P.pack[s.i]; if (s.w === 'b') return this.ctx.stock && this.ctx.stock[s.i]; return null; },
   renderInv() {
     const it = this.selItem(); const s = this.sel; let acts = '';
-    if (it && s.w === 'p') { if (it.type === 'gun') acts += [0, 1, 2, 3].map(i => `<button class="btn small" data-act="equip" data-slot="${i}">Equip → ${i + 1}</button>`).join(''); else acts += `<button class="btn small" data-act="equipShield">Equip shield</button>`; acts += `<button class="btn small" data-act="drop">Drop</button>`; if (this.ctx.vendor) acts += `<button class="btn small primary" data-act="sell">Sell ${fmtInt(it.value)} cr</button>`; }
+    if (it && s.w === 'p') { if (it.type === 'gun') acts += [0, 1, 2, 3].map(i => `<button class="btn small" data-act="equip" data-slot="${i}">Equip → ${i + 1}</button>`).join(''); else if (it.type === 'glim') acts += `<button class="btn small" data-act="equipGlim">Equip glim</button>`; else acts += `<button class="btn small" data-act="equipShield">Equip shield</button>`; acts += `<button class="btn small" data-act="drop">Drop</button>`; if (this.ctx.vendor) acts += `<button class="btn small primary" data-act="sell">Sell ${fmtInt(it.value)} cr</button>`; }
+    if (it && s.w === 'g') acts += `<button class="btn small" data-act="glimToggle">${P.glimOn ? 'Turn light off' : 'Turn light on'}</button>`;
     if (it && s.w === 'w') { acts += `<button class="btn small" data-act="active">Make active</button><button class="btn small" data-act="unequip">Move to backpack</button>`; }
-    const cmp = it ? (it.type === 'gun' ? (s.w === 'w' ? null : P.gun()) : (s.w === 's' ? null : P.shieldItem)) : null;
+    const cmp = it && s.w !== 'w' && s.w !== 's' && s.w !== 'g' ? equippedFor(it) : null;
     $('pnBody').innerHTML = `<div class="inv">
-      <div><h3>Equipped <span>${fmtInt(P.credits)} cr</span></h3>${P.weapons.map((w, i) => this.row(w, `data-w="${i}"`, i + 1, i === P.cur ? ' · active' : '')).join('')}${this.row(P.shieldItem, 'data-s="0"', '◆')}
+      <div><h3>Equipped <span>${fmtInt(P.credits)} cr</span></h3>${P.weapons.map((w, i) => this.row(w, `data-w="${i}"`, i + 1, i === P.cur ? ' · active' : '')).join('')}${this.row(P.shieldItem, 'data-s="0"', '◆')}${this.row(P.glimItem, 'data-g="0"', '✦', P.glimItem ? (P.glimOn ? ' · auto' : ' · off') : '')}
         <h3 style="margin-top:14px">Ammo <span>Grenades ${P.grenades}</span></h3><div class="stats2">${Object.keys(AMMO).map(k => `<div class="stat"><span>${AMMO[k].n}</span><b>${P.ammo[k]} / ${AMMO[k].max}</b></div>`).join('')}</div></div>
       <div><h3>Backpack <span>${P.pack.length} / ${P.packMax}</span></h3>${P.pack.length ? P.pack.map((p, i) => this.row(p, `data-p="${i}"`, '')).join('') : '<div class="irow empty">Nothing yet. Loot drops, chests and vendors fill this.</div>'}</div>
       <div>${it ? itemCard(it, cmp) + `<div class="acts">${acts}</div>` : '<h3>Select an item</h3><p style="color:var(--dim);font-size:13px">Tap any item to compare it with what you have equipped. Green arrows are upgrades.</p>'}</div></div>`;
@@ -179,7 +180,7 @@ const UI = {
     const c = this.ctx; const it = this.selItem(); const s = this.sel;
     if (c.vendor === 'arms') {
       let acts = ''; if (it && s.w === 'b') acts = `<button class="btn small primary" data-act="buy" ${P.credits >= it.value * 2.5 ? '' : 'disabled'}>Buy ${fmtInt(it.value * 2.5)} cr</button>`; if (it && s.w === 'p') acts = `<button class="btn small primary" data-act="sell">Sell ${fmtInt(it.value)} cr</button>`;
-      const cmp = it ? (it.type === 'gun' ? P.gun() : P.shieldItem) : null;
+      const cmp = equippedFor(it);
       $('pnBody').innerHTML = `<div class="shop"><div><h3>For sale <span>${fmtInt(P.credits)} cr</span></h3>${c.stock.map((x, i) => x ? this.row(x, `data-b="${i}"`, '', ` · ${fmtInt(x.value * 2.5)} cr`) : '').join('')}
         <h3 style="margin-top:14px">Sell from backpack</h3>${P.pack.length ? P.pack.map((p, i) => this.row(p, `data-p="${i}"`, '', ` · ${fmtInt(p.value)} cr`)).join('') : '<div class="irow empty">Backpack is empty</div>'}</div>
         <div>${it ? itemCard(it, cmp) + `<div class="acts">${acts}</div>` : '<h3>Select an item</h3>'}</div></div>`;
@@ -204,7 +205,7 @@ const UI = {
       <div class="set"><label for="sQ">Render quality</label><input type="range" id="sQ" min="0" max="2" step="1" value="${GFX.quality}"><output>${QUALITY[GFX.quality].name}</output></div>
       <div class="set"><label for="sDay">Day length</label><input type="range" id="sDay" min="0" max="${DAY_LENS.length - 1}" step="1" value="${DayClock.len}"><output>${DAY_LENS[DayClock.len].name}</output></div>
       <div class="set"><label for="sInv">Invert look</label><input type="checkbox" id="sInv" ${SENS.invert ? 'checked' : ''}><output></output></div>
-      </div><div><h3>Controls</h3><div class="keys">${[['Move', 'WASD'], ['Look', 'Mouse'], ['Fire', 'LMB'], ['Aim down sights', 'RMB'], ['Jump', 'Space'], ['Sprint', 'Shift'], ['Reload', 'R'], ['Profession skill', 'Q'], ['Grenade', 'G'], ['Melee', 'V'], ['Interact / pick up', 'E'], ['Weapons', '1-4 / Wheel'], ['Inventory', 'Tab / I'], ['Atlas', 'M'], ['Menu', 'Esc / P']].map(([a, b]) => `<div><span>${a}</span><kbd>${b}</kbd></div>`).join('')}</div>
+      </div><div><h3>Controls</h3><div class="keys">${[['Move', 'WASD'], ['Look', 'Mouse'], ['Fire', 'LMB'], ['Aim down sights', 'RMB'], ['Jump', 'Space'], ['Sprint', 'Shift'], ['Reload', 'R'], ['Profession skill', 'Q'], ['Grenade', 'G'], ['Melee', 'V'], ['Interact / pick up', 'E'], ['Shoulder light', 'T'], ['Weapons', '1-4 / Wheel'], ['Inventory', 'Tab / I'], ['Atlas', 'M'], ['Menu', 'Esc / P']].map(([a, b]) => `<div><span>${a}</span><kbd>${b}</kbd></div>`).join('')}</div>
       <p style="font-size:12px;color:var(--dim);line-height:1.5;margin-top:12px">On touch screens: drag the left side to move (push to the top edge to sprint), drag the right side to look, and use the on-screen buttons. Progress saves automatically in this browser.</p>
       ${fromTitle ? '' : `<h3 style="margin-top:14px">Danger zone</h3><button class="btn small" data-act="wipe">Delete save and restart</button><span id="wipeConfirm"></span>`}</div></div>`;
   },
@@ -216,14 +217,16 @@ const UI = {
     else if (t.id === 'sDay') { DayClock.setLen(v); out.textContent = DAY_LENS[v].name; }
   },
   onPanelClick(e) {
-    const r = e.target.closest('[data-w],[data-p],[data-s],[data-b]'); const a = e.target.closest('[data-act]');
+    const r = e.target.closest('[data-w],[data-p],[data-s],[data-g],[data-b]'); const a = e.target.closest('[data-act]');
     if (a) { this.act(a.dataset.act, a.dataset); return; }
-    if (r && !r.classList.contains('empty')) { Sfx.play('ui'); const k = ['w', 'p', 's', 'b'].find(x => r.dataset[x] !== undefined); this.sel = { w: k, i: +r.dataset[k] }; this.showTab(this.tab); }
+    if (r && !r.classList.contains('empty')) { Sfx.play('ui'); const k = ['w', 'p', 's', 'g', 'b'].find(x => r.dataset[x] !== undefined); this.sel = { w: k, i: +r.dataset[k] }; this.showTab(this.tab); }
   },
   act(act, d) {
     const s = this.sel; const it = this.selItem(); Sfx.play('ui');
     switch (act) {
       case 'equip': { const slot = +d.slot; const old = P.weapons[slot]; P.weapons[slot] = it; P.pack.splice(s.i, 1); if (old) P.pack.push(old); if (it.cur == null) it.cur = P.magSize(it); if (slot === P.cur || !old) { VM.set(P.weapons[P.cur]); } this.sel = null; break; }
+      case 'equipGlim': { const old = P.glimItem; P.glimItem = it; P.pack.splice(s.i, 1); if (old) P.pack.push(old); this.sel = null; break; }
+      case 'glimToggle': Glim.toggle(); break;
       case 'equipShield': { const old = P.shieldItem; P.shieldItem = it; P.pack.splice(s.i, 1); if (old) P.pack.push(old); P.recalc(); P.sh = Math.min(P.sh, P.maxSh); this.sel = null; break; }
       case 'drop': P.pack.splice(s.i, 1); this.pendingDrops.push(it); this.sel = null; break;
       case 'sell': P.credits += it.value; P.pack.splice(s.i, 1); Sfx.play('credits'); this.sel = null; break;
