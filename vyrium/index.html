@@ -839,6 +839,12 @@ function makeSky(top, hor, bot, sunDir, sunCol, opts = {}) {
 }
 
 // ---------- Canvas textures ----------
+function poolTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  for (const [s, a] of [[0, 0.52], [0.34, 0.52], [0.38, 0.3], [0.66, 0.3], [0.7, 0.12], [0.94, 0.12], [1, 0]]) g.addColorStop(s, `rgba(255,255,255,${a})`);
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+}
 function windowTexture(lit, wall, frame, seed) {
   const c = document.createElement('canvas'); c.width = 64; c.height = 64; const x = c.getContext('2d'); const r = mulberry32(seed);
   x.fillStyle = wall; x.fillRect(0, 0, 64, 64);
@@ -1222,6 +1228,8 @@ const DayClock = {
 const NIGHT = { top: new THREE.Color(0x060a1c), hor: new THREE.Color(0x1a2444), bot: new THREE.Color(0x0a0d16), fog: new THREE.Color(0x141c30), hemi: new THREE.Color(0x5a6ea8), ground: new THREE.Color(0x181c26), moon: new THREE.Color(0x9ab0ff) };
 const DUSK = { top: new THREE.Color(0x4a4a8a), hor: new THREE.Color(0xff8a50), fog: new THREE.Color(0xd08a6a), sun: new THREE.Color(0xffa060) };
 const _dc = new THREE.Color();
+const CITY_NEON = { corp: [0x4fd6ff, 0xff3ad0, 0x7a5aff, 0x4fd6ff], clan: [0xff9a3d, 0xff4a2a, 0xffc040], neutral: [0x9be37a, 0x4fd6ff, 0xff5ab0, 0xc8ff5a] };
+const CITY_LAMP = { corp: 0xc8f0ff, clan: 0xffb050, neutral: 0xe4ffc8 };
 
 class Zone {
   constructor(def) {
@@ -1230,7 +1238,8 @@ class Zone {
     this.group = new THREE.Group(); scene.add(this.group);
     this.colliders = []; this.grid = new Map(); this.stamp = 0;
     this.interact = []; this.triggers = []; this.anims = []; this.pads = []; this.spawnList = []; this.arrivals = {}; this.booths = [];
-    this.statics = []; this.glows = [];
+    this.statics = []; this.glows = []; this.fixtures = []; this.poolSpots = []; this.lampsOn = 0; this.glowK = 1; this.poolGlow = 1;
+    this.drng = mulberry32(this.seed + 99); // decoration-only randomness, so adding fixtures never shifts the zone layout
     this.waterY = -999; this.lvl = def.l || [1, 1];
     this.size = { city: 300, town: 210, platform: 250, dungeon: 170 }[def.k] || 400; this.half = this.size / 2;
     const B = this.B, vt = def.k === 'veil' ? VEIL_TINTS[def.id] : null;
@@ -1325,6 +1334,70 @@ class Zone {
     list.forEach((t, i) => { m.setMatrixAt(i, mat4(t.x, t.y, t.z, t.rx || 0, t.ry || 0, t.rz || 0, t.s, t.s * (t.sy || 1), t.s)); if (t.c !== undefined) m.setColorAt(i, c.set(t.c)); });
     m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; this.group.add(m); return m;
   }
+  // ---------- light fixtures ----------
+  // Every lamp, sign or glow worth lighting registers a fixture. A small pool of real point lights follows the fixtures
+  // nearest the camera (updateLights) and a banded decal marks the ground beneath. 'lamp' fixtures switch on at dusk;
+  // 'glow' fixtures (fires, screens, portals, dungeon lights) are always on but only really read after dark.
+  light(x, y, z, col, range, k, o = {}) {
+    const f = { x, y, z, col: new THREE.Color(col), range, k, kind: o.kind || 'glow', fl: o.flicker || 0, pulse: o.pulse || 0, ph: this.drng() * TAU };
+    this.fixtures.push(f);
+    if (o.pool) this.poolSpots.push({ x, y: (o.gy !== undefined ? o.gy : this.heightAt(x, z)) + 0.07, z, r: o.pool, c: col, lamp: f.kind === 'lamp' });
+    return f;
+  }
+  clearAt(x, z, r) { const y = this.heightAt(x, z); return !this.query(x, z, r).some(c => x > c.x0 - r && x < c.x1 + r && z > c.z0 - r && z < c.z1 + r && c.y1 > y + 0.5); }
+  lampPost(x, z, col, ry = 0, o = {}) { // street lamp: post, arm over the road, light bar, neon collar
+    const y = this.heightAt(x, z), sx = Math.sin(ry), sz = Math.cos(ry), H = o.h || 7, lx = x + sx * 1.6, lz = z + sz * 1.6;
+    this.st(gCyl(0.12, 0.2, H, 6), mat4(x, y + H / 2, z), 0x23272e); this.st(gBox(0.16, 0.16, 2), mat4(x + sx * 0.9, y + H, z + sz * 0.9, 0, ry, 0), 0x23272e);
+    this.gl(gBox(0.36, 0.12, 0.9), mat4(lx, y + H - 0.12, lz, 0, ry, 0), col); this.gl(gCyl(0.24, 0.24, 0.3, 6), mat4(x, y + 2.4, z), o.neon || col);
+    this.addBoxCol(x, z, 0.5, 0.5, y - 1, y + H);
+    this.light(lx, y + H - 0.6, lz, col, 16, 1.5, { kind: 'lamp', pool: 4.5, gy: this.heightAt(lx, lz), flicker: o.flicker });
+  }
+  bollard(x, z, col) {
+    const y = this.heightAt(x, z);
+    this.st(gCyl(0.22, 0.26, 1.1, 6), mat4(x, y + 0.55, z), 0x2a2e36); this.gl(gCyl(0.24, 0.24, 0.22, 6), mat4(x, y + 0.92, z), col);
+    this.addBoxCol(x, z, 0.5, 0.5, y - 1, y + 1.1); this.light(x, y + 1.3, z, col, 7, 0.8, { kind: 'lamp', pool: 2.2, gy: y });
+  }
+  floodMast(x, z, col, ry = 0, o = {}) { // work-light mast with twin heads and a red aviation light
+    const y = this.heightAt(x, z), H = o.h || 11, sx = Math.sin(ry), sz = Math.cos(ry), cx = Math.cos(ry), cz = -Math.sin(ry);
+    this.st(gCyl(0.18, 0.3, H, 6), mat4(x, y + H / 2, z), 0x30343c); this.st(gBox(2.6, 0.2, 0.2), mat4(x, y + H, z, 0, ry, 0), 0x30343c);
+    for (const s of [-1, 1]) { const hx = x + cx * s * 1.1, hz = z + cz * s * 1.1; this.st(gBox(0.8, 0.55, 0.5), mat4(hx, y + H + 0.1, hz, 0, ry, 0), 0x30343c); this.gl(gBox(0.7, 0.45, 0.06), mat4(hx + sx * 0.27, y + H + 0.1, hz + sz * 0.27, 0, ry, 0), col); }
+    this.gl(gBox(0.3, 0.3, 0.3), mat4(x, y + H + 0.6, z), 0xff3a4a); this.addBoxCol(x, z, 0.7, 0.7, y - 1, y + H);
+    const lx = x + sx * 4, lz = z + sz * 4; this.light(lx, y + H - 2, lz, col, 26, 1.7, { kind: 'lamp', pool: 7, gy: this.heightAt(lx, lz), flicker: o.flicker });
+  }
+  beacon(x, z, col) { // pulsing warning pylon
+    const y = this.heightAt(x, z);
+    this.st(gBox(0.8, 3, 0.8), mat4(x, y + 1.5, z), 0x2a2a30); this.gl(gBox(0.84, 0.2, 0.84), mat4(x, y + 2.2, z), col); this.gl(gSph(0.4, 0), mat4(x, y + 3.3, z), col);
+    this.addBoxCol(x, z, 0.9, 0.9, y - 1, y + 3); this.light(x, y + 3.4, z, col, 14, 1.4, { pulse: 3, pool: 3.5, gy: y });
+  }
+  setupLights() {
+    const n = this.fixtures.length ? [4, 6, 8][GFX.quality] : 0; this.plights = []; this.poolMats = [];
+    for (let i = 0; i < n; i++) { const l = new THREE.PointLight(0xffffff, 0, 16, 2); this.group.add(l); this.plights.push(l); }
+    for (const lamp of [true, false]) {
+      const list = this.poolSpots.filter(p => p.lamp === lamp); if (!list.length) continue;
+      const mat = new THREE.MeshBasicMaterial({ map: poolTexture(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, opacity: 0 });
+      const m = this.inst(geo('poolDisc', () => new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2)), mat, list.map(p => ({ x: p.x, y: p.y, z: p.z, s: p.r, c: p.c }))); m.renderOrder = 1;
+      this.poolMats.push({ mat, lamp });
+    }
+    this._bd = []; this._bf = [];
+  }
+  updateLights(t) {
+    for (const p of this.poolMats) p.mat.opacity = p.lamp ? this.lampsOn : this.poolGlow;
+    const L = this.plights, n = L.length; if (!n) return;
+    const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z, bd = this._bd, bf = this._bf, on = this.lampsOn; bd.length = 0; bf.length = 0;
+    for (const f of this.fixtures) { // keep the n+1 nearest; the (n+1)th sets the fade edge so lights never pop when the set changes
+      if (f.kind === 'lamp' && on < 0.001) continue;
+      const d = (f.x - cx) ** 2 + (f.y - cy) ** 2 + (f.z - cz) ** 2; if (bd.length > n && d >= bd[n]) continue;
+      let i = bd.length; while (i > 0 && bd[i - 1] > d) i--; bd.splice(i, 0, d); bf.splice(i, 0, f); if (bd.length > n + 1) { bd.pop(); bf.pop(); }
+    }
+    const edge = bd.length > n ? Math.sqrt(bd[n]) : 1e9;
+    for (let i = 0; i < n; i++) {
+      const l = L[i], f = bf[i]; if (!f) { l.intensity = 0; continue; }
+      const d = Math.sqrt(bd[i]); let k = f.k * (f.kind === 'lamp' ? on : this.glowK) * smooth(edge, edge * 0.8, d) * smooth(110, 70, d);
+      if (f.fl) k *= 1 - f.fl * Math.max(0, Math.sin(t * 17 + f.ph) * Math.sin(t * 5.3 + f.ph * 3));
+      if (f.pulse) k *= 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * f.pulse + f.ph));
+      l.position.set(f.x, f.y, f.z); l.color.copy(f.col); l.distance = f.range; l.intensity = k;
+    }
+  }
   pad(x, z, r, opt = {}) { const p = Object.assign({ x, z, r, h: null }, opt); this.pads.push(p); return p; }
   nearPad(x, z, extra = 0) { for (const p of this.pads) if (Math.hypot(x - p.x, z - p.z) < p.r + extra) return p; return null; }
 
@@ -1405,16 +1478,21 @@ class Zone {
       this.sky = makeSky(P.sky[0], P.sky[1], P.sky[2], sunDir, d.k === 'veil' ? P.glow : P.sun, { planet: P.planet || (d.k === 'veil' ? P.glow : 0), planetAng: (this.seed % 628) / 100, planetY: 260 + this.seed % 200, stars, clouds: d.k !== 'veil' && d.b !== 'polluted', seed: this.seed, cloudCol: d.b === 'wasteland' ? 0xd8c0b0 : 0xffffff });
       this.group.add(this.sky);
     }
-    const hemi = new THREE.HemisphereLight(d.k === 'dungeon' ? this.ds.light : P.sky[1], d.k === 'dungeon' ? this.ds.floor : P.g[0], d.k === 'dungeon' ? 0.55 : 0.5);
-    const sun = new THREE.DirectionalLight(d.k === 'dungeon' ? this.ds.light : P.sun, d.k === 'dungeon' ? 0.55 : 0.82); sun.position.copy(sunDir).multiplyScalar(100);
+    const hemi = new THREE.HemisphereLight(d.k === 'dungeon' ? this.ds.light : P.sky[1], d.k === 'dungeon' ? this.ds.floor : P.g[0], d.k === 'dungeon' ? 0.36 : 0.5);
+    const sun = new THREE.DirectionalLight(d.k === 'dungeon' ? this.ds.light : P.sun, d.k === 'dungeon' ? 0.4 : 0.82); sun.position.copy(sunDir).multiplyScalar(100);
     this.group.add(hemi, sun);
-    if (d.k === 'dungeon') { vmHemi.color.set(0xffffff); vmHemi.intensity = vmSun.intensity = 0.75; return; }
+    if (d.k === 'dungeon') { vmHemi.color.set(0xffffff); vmHemi.intensity = vmSun.intensity = 0.75; this.lampsOn = this.glowK = this.poolGlow = 1; return; }
+    // night ambience per zone: cities glow with their faction's neon, the Veil with its own light, toxic land with a green haze
+    const city = d.k === 'city' || d.k === 'town' || d.k === 'platform', B = this.B;
+    const amb = city ? { tint: CITY_NEON[d.f || 'neutral'][0], sky: 0.24, hemi: 0.35, boost: 0.08 } : d.k === 'veil' ? { tint: P.glow, sky: 0.16, hemi: 0.3, boost: 0.04 } :
+      B.toxic ? { tint: 0x7ed43a, sky: 0.2, hemi: 0.3, boost: 0.02 } : { tint: 0x5a6ea8, sky: 0, hemi: 0, boost: B.snowy ? 0.07 : B === BIOMES.darkforest ? -0.05 : 0 };
     // the sun crosses the sky on a tilted arc whose bearing comes from the zone's old fixed sun
     const az = this.seed % 6, east = new THREE.Vector3(Math.cos(az), 0, Math.sin(az)), tilt = 0.45;
     const up = new THREE.Vector3(0, Math.cos(tilt), 0).addScaledVector(new THREE.Vector3(-east.z, 0, east.x), Math.sin(tilt));
     const C = c => new THREE.Color(c);
     this.day = { east, up, hemi, sun, stars, sunCol: C(d.k === 'veil' ? P.glow : P.sun), sky: [C(P.sky[0]), C(P.sky[1]), C(P.sky[2])], fog: C(P.fog), hemiSky: C(P.sky[1]), hemiGround: C(P.g[0]),
-      night: [C(P.sky[0]).lerp(NIGHT.top, 0.85), C(P.sky[1]).lerp(NIGHT.hor, 0.85), C(P.sky[2]).lerp(NIGHT.bot, 0.85)], nightFog: C(P.fog).lerp(NIGHT.fog, 0.85), dir: new THREE.Vector3() };
+      night: [C(P.sky[0]).lerp(NIGHT.top, 0.85).lerp(C(amb.tint), amb.sky * 0.3), C(P.sky[1]).lerp(NIGHT.hor, 0.85).lerp(C(amb.tint), amb.sky), C(P.sky[2]).lerp(NIGHT.bot, 0.85)],
+      nightFog: C(P.fog).lerp(NIGHT.fog, 0.85).lerp(C(amb.tint), amb.sky * 0.8), nightHemi: NIGHT.hemi.clone().lerp(C(amb.tint), amb.hemi), nightK: 0.34 + amb.boost, dir: new THREE.Vector3() };
     this.updateDay();
   }
   updateDay() {
@@ -1431,12 +1509,13 @@ class Zone {
       const st = this.sky.userData.stars; if (st) { st.material.opacity = Math.max(D.stars, (1 - day) * 0.9); st.visible = st.material.opacity > 0.01; }
     }
     tone(scene.fog.color, D.fog, D.nightFog, DUSK.fog, 0.35); scene.background.copy(scene.fog.color);
-    D.hemi.color.copy(NIGHT.hemi).lerp(D.hemiSky, day); D.hemi.groundColor.copy(NIGHT.ground).lerp(D.hemiGround, day); D.hemi.intensity = lerp(0.34, 0.5, day);
+    D.hemi.color.copy(D.nightHemi).lerp(D.hemiSky, day); D.hemi.groundColor.copy(NIGHT.ground).lerp(D.hemiGround, day); D.hemi.intensity = lerp(D.nightK, 0.5, day);
     vmHemi.color.copy(NIGHT.moon).lerp(_dc.set(0xffffff), day); vmHemi.intensity = lerp(0.5, 0.75, day); vmSun.intensity = lerp(0.3, 0.75, day);
     // one directional light plays sun by day and moon by night; it fades out near the horizon so the swap is invisible
     if (el >= 0) { D.sun.position.copy(D.dir).multiplyScalar(100); D.sun.color.copy(D.sunCol).lerp(DUSK.sun, dusk * 0.7); D.sun.intensity = 0.82 * sunK; }
     else { D.sun.position.copy(D.dir).multiplyScalar(-100); D.sun.color.copy(NIGHT.moon); D.sun.intensity = 0.3 * moonK; }
     if (this.winMat) this.winMat.emissiveIntensity = lerp(1.5, 0.9, day);
+    this.lampsOn = 1 - smooth(0.02, 0.14, el); this.glowK = lerp(0.3, 1, 1 - day); this.poolGlow = lerp(0.06, 1, 1 - day);
   }
 
   // ---------- master build ----------
@@ -1446,6 +1525,7 @@ class Zone {
     else if (d.k === 'city' || d.k === 'town' || d.k === 'platform') this.buildCity();
     else this.buildWild();
     this.setupAtmos();
+    this.setupLights();
     this.flushStatics();
   }
   placeGates(inset) {
@@ -1469,6 +1549,7 @@ class Zone {
       this.addBoxCol(g.x - tz * 4.4, g.z + tx * 4.4, 1.4, 1.4, y - 2, y + 9); this.addBoxCol(g.x + tz * 4.4, g.z - tx * 4.4, 1.4, 1.4, y - 2, y + 9);
       this.triggers.push({ x: g.x + tx * 0.8, z: g.z + tz * 0.8, r: 3.2, to: g.to, kind: 'gate' });
       this.arrivals[g.to] = { x: g.x - tx * 12, z: g.z - tz * 12, yaw: Math.atan2(tx, tz) };
+      this.light(g.x - tx * 2, y + 7, g.z - tz * 2, col, 18, 1.2, { pool: 5, gy: this.heightAt(g.x - tx * 2, g.z - tz * 2) });
     }
   }
   pickSpots(n, minFromPads, minDist, extent, rngf) {
@@ -1522,7 +1603,7 @@ class Zone {
     this.makeChest(this.bossSpot.x + 9, this.bossSpot.z + 4, true);
     this.buildBossArena(this.bossSpot);
     if (B.floaters || this.k === 'veil') this.buildFloaters();
-    if (B.crystals) for (let i = 0; i < 18; i++) { const x = rr(r, -ext, ext), z = rr(r, -ext, ext); if (this.nearPad(x, z, 4)) continue; const cc = buildCrystalCluster(P.glow || 0x7ad8ff); cc.position.set(x, this.heightAt(x, z), z); cc.scale.setScalar(rr(r, 0.8, 1.8)); this.group.add(cc); }
+    if (B.crystals) for (let i = 0; i < 18; i++) { const x = rr(r, -ext, ext), z = rr(r, -ext, ext); if (this.nearPad(x, z, 4)) continue; const cc = buildCrystalCluster(P.glow || 0x7ad8ff); cc.position.set(x, this.heightAt(x, z), z); cc.scale.setScalar(rr(r, 0.8, 1.8)); this.group.add(cc); this.light(x, this.heightAt(x, z) + 2.2, z, P.glow || 0x7ad8ff, 10, 0.8); }
     // spawns
     const L = this.lvl;
     const pool = POOLS[this.k === 'veil' ? 'veil' : d.b] || POOLS.plains;
@@ -1541,9 +1622,11 @@ class Zone {
     this.booths.push({ x: h.x + 7, z: h.z - 2 });
     this.box(h.x - 8, y, h.z + 6, 6, 3.2, 5, 0x6a6e72); this.box(h.x - 8, y + 3.2, h.z + 6, 7, 0.4, 6, 0x3a3e44, 0, false);
     this.gl(gBox(0.2, 1.4, 0.2), mat4(h.x - 4.9, y + 1.8, h.z + 6), 0xffc23a);
-    for (const [ox, oz] of [[-12, -10], [12, 10], [12, -12]]) { this.st(gCyl(0.1, 0.14, 4, 5), mat4(h.x + ox, y + 2, h.z + oz), 0x3a3e44); this.gl(gSph(0.3, 0), mat4(h.x + ox, y + 4.1, h.z + oz), 0xfff0c0); }
-    if (this.def.r) { const rl = buildRelay(0x4fd6ff); rl.position.set(h.x, y, h.z); this.group.add(rl); this.addBoxCol(h.x, h.z, 3, 3, y - 1, y + 11); this.interact.push({ x: h.x, z: h.z, y, r: 5, kind: 'relay', label: 'Use Relay Pylon' }); this.anims.push(t => rl.userData.rings.forEach((g, i) => g.rotation.z = t * (0.6 + i * 0.3) * (i % 2 ? -1 : 1))); }
-    if (this.k === 'island') { const k = buildKiosk('ARMS', 0xffc23a); k.position.set(h.x - 9, y, h.z - 8); k.rotation.y = 0.8; this.group.add(k); this.addBoxCol(h.x - 9, h.z - 8, 2.4, 2.4, y - 1, y + 2.5); this.interact.push({ x: h.x - 9, z: h.z - 8, y, r: 3.4, kind: 'vendor', label: 'Browse Arms Vendor' }); }
+    for (const [ox, oz] of [[-12, -10], [12, 10], [12, -12]]) this.lampPost(h.x + ox, h.z + oz, 0xd8f4ff, Math.atan2(-ox, -oz), { neon: 0x4fd6ff });
+    this.floodMast(h.x - 15, h.z - 3, 0xe8f6ff, Math.atan2(15, 3));
+    this.light(h.x - 4.4, y + 2.4, h.z + 6, 0xffc23a, 9, 0.9, { pool: 2.5, gy: y }); this.light(h.x + 7, y + 3, h.z - 3.4, 0x5cf0a0, 9, 0.7, { pool: 2.5, gy: y });
+    if (this.def.r) { const rl = buildRelay(0x4fd6ff); rl.position.set(h.x, y, h.z); this.group.add(rl); this.addBoxCol(h.x, h.z, 3, 3, y - 1, y + 11); this.interact.push({ x: h.x, z: h.z, y, r: 5, kind: 'relay', label: 'Use Relay Pylon' }); this.light(h.x, y + 9, h.z, 0x4fd6ff, 16, 1, { pool: 5, gy: y }); this.anims.push(t => rl.userData.rings.forEach((g, i) => g.rotation.z = t * (0.6 + i * 0.3) * (i % 2 ? -1 : 1))); }
+    if (this.k === 'island') { const k = buildKiosk('ARMS', 0xffc23a); k.position.set(h.x - 9, y, h.z - 8); k.rotation.y = 0.8; this.group.add(k); this.addBoxCol(h.x - 9, h.z - 8, 2.4, 2.4, y - 1, y + 2.5); this.interact.push({ x: h.x - 9, z: h.z - 8, y, r: 3.4, kind: 'vendor', label: 'Browse Arms Vendor' }); this.light(h.x - 9, y + 2.6, h.z - 8, 0xffc23a, 8, 0.7, { pool: 2.5, gy: y }); }
     this.arrivals._relay = { x: h.x, z: h.z + 8, yaw: Math.PI };
     this.arrivals._hub = { x: h.x + 2, z: h.z + 13, yaw: Math.PI };
   }
@@ -1556,6 +1639,7 @@ class Zone {
     this.addBoxCol(s.x - fx * 2, s.z - fz * 2, 9, 9, y - 2, y + 5);
     this.triggers.push({ x: s.x + fx * 3.6, z: s.z + fz * 3.6, r: 2.4, to: dgId, kind: 'door' });
     this.arrivals[dgId] = { x: s.x + fx * 10, z: s.z + fz * 10, yaw: ang + Math.PI };
+    this.light(s.x + fx * 5, y + 4.5, s.z + fz * 5, col, 14, 1.2, { pool: 4, gy: this.heightAt(s.x + fx * 5, s.z + fz * 5) });
   }
   makeChest(x, z, rare) {
     const y = this.heightAt(x, z); const m = buildChest(rare); m.position.set(x, y, z); m.rotation.y = rnd() * TAU; this.group.add(m);
@@ -1602,15 +1686,19 @@ class Zone {
     if (B.farm) for (let i = 0; i < 4; i++) { const s = this.pickSpots(1, 10, 0, ext)[0]; if (!s) continue; const y = this.heightAt(s.x, s.z); this.st(gCyl(3, 3, 12, 10), mat4(s.x, y + 6, s.z), 0xd8d0c0); this.st(new THREE.SphereGeometry(3, 10, 5, 0, TAU, 0, Math.PI / 2), mat4(s.x, y + 12, s.z), 0x8a3a2a); this.addBoxCol(s.x, s.z, 6, 6, y - 1, y + 15); this.box(s.x + 8, y, s.z + 2, 8, 4, 6, 0xa83a2a); }
   }
   buildCamp(c) {
-    const r = this.rng, y = this.heightAt(c.x, c.z); const style = this.k === 'veil' ? 'ruin' : pick(r, this.B === BIOMES.darkforest ? ['bandit', 'creature', 'ruin'] : ['bandit', 'creature', 'ruin', 'scrap']);
+    const r = this.rng, dr = this.drng, y = this.heightAt(c.x, c.z); const style = this.k === 'veil' ? 'ruin' : pick(r, this.B === BIOMES.darkforest ? ['bandit', 'creature', 'ruin'] : ['bandit', 'creature', 'ruin', 'scrap']);
     if (style === 'bandit') {
       for (let i = 0; i < 3; i++) { const a = i * 2.1 + r(), x = c.x + Math.cos(a) * 7, z = c.z + Math.sin(a) * 7; const col = pick(r, [0x8a6a4a, 0x6a7a5a, 0xa8563a]); this.st(gCone(2.4, 3, 4), mat4(x, y + 1.5, z, 0, a, 0), col); this.addBoxCol(x, z, 3, 3, y - 1, y + 2.5); }
       this.gl(gCone(0.6, 1.2, 5), mat4(c.x, y + 0.6, c.z), 0xff8a2a); this.st(gTorus(0.9, 0.25, 4, 8), mat4(c.x, y + 0.1, c.z, Math.PI / 2, 0, 0), 0x4a4a4a);
       for (let i = 0; i < 4; i++) { const x = c.x + rr(r, -9, 9), z = c.z + rr(r, -9, 9); if (Math.hypot(x - c.x, z - c.z) < 3) continue; this.box(x, this.heightAt(x, z), z, 1.4, 1.2, 1.4, 0x7a5a3a, r()); }
       this.box(c.x + 10, y, c.z - 3, 1, 1.6, 6, 0x6a6458, 0.3);
+      this.light(c.x, y + 1.4, c.z, 0xff8a2a, 14, 1.6, { flicker: 0.35, pool: 4, gy: y });
+      const a = dr() * TAU, lx = c.x + Math.cos(a) * 11, lz = c.z + Math.sin(a) * 11; if (this.clearAt(lx, lz, 0.8)) this.lampPost(lx, lz, 0xffc070, Math.atan2(c.x - lx, c.z - lz), { h: 5, flicker: 0.2, neon: 0xff4a2a });
     } else if (style === 'scrap') {
       for (let i = 0; i < 5; i++) { const a = r() * TAU, x = c.x + Math.cos(a) * rr(r, 5, 10), z = c.z + Math.sin(a) * rr(r, 5, 10); this.box(x, this.heightAt(x, z), z, rr(r, 2, 5), rr(r, 1.5, 3.5), rr(r, 1, 2), pick(r, [0x7a7a80, 0x8a6a4a, 0x5a6a7a]), a); }
       this.st(gCyl(1.2, 1.2, 2.2, 8), mat4(c.x, y + 1.1, c.z), 0x4a4e56); this.gl(gTorus(1.25, 0.12, 4, 12), mat4(c.x, y + 1.6, c.z, Math.PI / 2, 0, 0), 0x4fd6ff); this.addBoxCol(c.x, c.z, 2.4, 2.4, y - 1, y + 2.2);
+      this.light(c.x, y + 2.2, c.z, 0x4fd6ff, 12, 1.1, { pool: 3.5, gy: y });
+      const a = dr() * TAU, mx = c.x + Math.cos(a) * 12, mz = c.z + Math.sin(a) * 12; if (this.clearAt(mx, mz, 1)) this.floodMast(mx, mz, 0xd8f4ff, Math.atan2(c.x - mx, c.z - mz), { h: 8, flicker: 0.3 });
     } else if (style === 'creature') {
       for (let i = 0; i < 7; i++) { const a = i / 7 * TAU + r() * 0.4, x = c.x + Math.cos(a) * 9, z = c.z + Math.sin(a) * 9, s = rr(r, 1.2, 2.4); this.st(new THREE.DodecahedronGeometry(s, 0), mat4(x, this.heightAt(x, z) + s * 0.3, z, r(), r(), 0), this.pal.cl); }
       for (let i = 0; i < 5; i++) this.st(gCyl(0.08, 0.1, 1.6, 4), mat4(c.x + rr(r, -4, 4), y + 0.1, c.z + rr(r, -4, 4), Math.PI / 2, r() * 3, 0), 0xe8e0d0);
@@ -1618,7 +1706,8 @@ class Zone {
       const col = this.k === 'veil' ? new THREE.Color(this.pal.g[2]).lerp(new THREE.Color(0xffffff), 0.4).getHex() : 0xb8b0a0;
       for (let i = 0; i < 6; i++) { const a = i / 6 * TAU, x = c.x + Math.cos(a) * 10, z = c.z + Math.sin(a) * 10, h = rr(r, 2, 8); this.box(x, this.heightAt(x, z), z, 1.4, h, 1.4, col); if (h > 6 && i % 2 === 0) this.st(gBox(1.8, 0.6, 1.8), mat4(x, this.heightAt(x, z) + h + 0.3, z), col); }
       this.box(c.x - 4, y, c.z + 6, 8, 2.5, 1, col, 0.4);
-      if (this.k === 'veil') this.gl(gSph(1, 1), mat4(c.x, y + 3, c.z), this.pal.glow);
+      if (this.k === 'veil') { this.gl(gSph(1, 1), mat4(c.x, y + 3, c.z), this.pal.glow); this.light(c.x, y + 3, c.z, this.pal.glow, 14, 1.2, { pool: 4, gy: y }); }
+      else { const a = dr() * TAU, lx = c.x + Math.cos(a) * 4, lz = c.z + Math.sin(a) * 4; if (this.clearAt(lx, lz, 0.8)) this.lampPost(lx, lz, 0xffd8a0, dr() * TAU, { h: 6, flicker: 0.6 }); } // a dying old street lamp
     }
   }
   buildTowerSite(s) {
@@ -1627,6 +1716,8 @@ class Zone {
     this.gl(gSph(2.2, 1), mat4(s.x, y + 32, s.z), 0x4fd6ff); this.st(gCyl(4.5, 3, 2, 8), mat4(s.x, y + 30, s.z), 0x3a3e46);
     for (let i = 0; i < 4; i++) { const a = i * TAU / 4 + 0.4, x = s.x + Math.cos(a) * 16, z = s.z + Math.sin(a) * 16; this.box(x, y, z, 8, 3.5, 1.2, 0x6a6e76, -a + Math.PI / 2); }
     for (let i = 0; i < 3; i++) { const a = i * TAU / 3, x = s.x + Math.cos(a) * 10, z = s.z + Math.sin(a) * 10; this.spawnList.push({ type: 'turret', x, z, lvl: this.lvl[1], tower: true }); }
+    for (let i = 0; i < 4; i++) { const a = i * TAU / 4 + 0.4 + Math.PI / 4, x = s.x + Math.cos(a) * 22, z = s.z + Math.sin(a) * 22; this.floodMast(x, z, 0xe8f6ff, Math.atan2(s.x - x, s.z - z), { h: 13 }); }
+    this.light(s.x, y + 31, s.z, 0x4fd6ff, 34, 1.3);
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(12, 2), new THREE.MeshBasicMaterial({ map: textTexture('CONTESTED VYRIUM TOWER', '#4fd6ff', '#0b1018', 768, 128), side: THREE.DoubleSide }));
     sign.position.set(s.x, y + 36, s.z); this.group.add(sign); this.anims.push(() => sign.lookAt(camera.position.x, sign.position.y, camera.position.z));
     this.makeChest(s.x + 4, s.z + 5, true);
@@ -1636,6 +1727,7 @@ class Zone {
     for (let i = 0; i < 9; i++) { const a = i / 9 * TAU, x = s.x + Math.cos(a) * 20, z = s.z + Math.sin(a) * 20, h = rr(r, 3, 9); this.box(x, this.heightAt(x, z) - 0.5, z, 2, h, 2, col, a); }
     const glowc = this.k === 'veil' ? this.pal.glow : 0xff4a3a;
     this.gl(gTorus(14, 0.2, 4, 40), mat4(s.x, y + 0.15, s.z, Math.PI / 2, 0, 0), glowc);
+    for (let i = 0; i < 4; i++) { const a = (i + 0.5) / 4 * TAU, x = s.x + Math.cos(a) * 16.5, z = s.z + Math.sin(a) * 16.5; this.beacon(x, z, glowc); }
   }
   buildFloaters() {
     const r = this.rng, P = this.pal; const list = [];
@@ -1647,7 +1739,8 @@ class Zone {
 
   // ---------- CITIES ----------
   buildCity() {
-    const d = this.def, r = this.rng, style = d.f || 'neutral', town = d.k === 'town', plat = d.k === 'platform';
+    const d = this.def, r = this.rng, dr = this.drng, style = d.f || 'neutral', town = d.k === 'town', plat = d.k === 'platform';
+    const neon = CITY_NEON[style], lampCol = CITY_LAMP[style];
     this.placeGates(10);
     const plazaR = town ? 26 : 34;
     for (const g of this.gateSpots) { this.pad(g.x, g.z, 12); const tx = Math.cos(g.ang), tz = Math.sin(g.ang); this.pad(g.x - tx * 18, g.z - tz * 18, 12); }
@@ -1713,6 +1806,13 @@ class Zone {
           const sm = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(w * 0.9, 12), 2.6), new THREE.MeshBasicMaterial({ map: textTexture(txt, fg, style === 'clan' ? '#1a120c' : '#08121c'), side: THREE.DoubleSide }));
           const face = pick(r, [0, 1, 2, 3]); const fx = [0, 0, 1, -1][face], fz = [1, -1, 0, 0][face];
           sm.position.set(x + fx * (w / 2 + 0.15), y + Math.min(h - 2, rr(r, 6, 14)), z + fz * (dd / 2 + 0.15)); sm.rotation.y = Math.atan2(fx, fz); this.group.add(sm);
+          const lx = sm.position.x + fx * 1.5, lz = sm.position.z + fz * 1.5; this.light(lx, sm.position.y, lz, fg, 13, 1.1, { pool: 3.5, gy: this.heightAt(lx, lz) });
+        }
+        // vertical neon on a street corner of the building
+        if (dr() < (style === 'clan' ? 0.3 : 0.6) && h > 10) {
+          const nc = pick(dr, neon), ex = dr() < 0.5 ? -1 : 1, ez = dr() < 0.5 ? -1 : 1, hx = x + ex * (w / 2 + 0.14), hz = z + ez * (dd / 2 + 0.14), top = Math.min(h - 1, rr(dr, 10, 32));
+          this.gl(gBox(0.24, top - 4.5, 0.24), mat4(hx, y + 4.5 + (top - 4.5) / 2, hz), nc);
+          if (dr() < 0.5) { const lx = hx + ex * 1.2, lz = hz + ez * 1.2; this.light(lx, y + 6, lz, nc, 11, 1, { kind: 'lamp', pool: 3, gy: this.heightAt(lx, lz) }); }
         }
       }
     }
@@ -1736,7 +1836,14 @@ class Zone {
       this.st(gBox(3, 2, dd), mat4((a.x + b.x) / 2, hy, (a.z + b.z) / 2, 0, Math.atan2(b.x - a.x, b.z - a.z), 0), 0xd8e2ec); this.gl(gBox(3.1, 0.3, dd), mat4((a.x + b.x) / 2, hy + 0.6, (a.z + b.z) / 2, 0, Math.atan2(b.x - a.x, b.z - a.z), 0), 0x4fd6ff);
     }
     // street lamps at intersections
-    for (let i = -4; i <= 4; i++) for (let j = -4; j <= 4; j++) { const x = i * BS + BS / 2, z = j * BS + BS / 2; if (Math.abs(x) > lim || Math.abs(z) > lim || Math.hypot(x, z) < plazaR) continue; if (plat && Math.hypot(x, z) > 108) continue; const y = this.heightAt(x, z); this.st(gCyl(0.12, 0.18, 6, 5), mat4(x + 3, y + 3, z + 3), 0x2a2e34); this.gl(gBox(0.6, 0.3, 0.6), mat4(x + 3, y + 6.1, z + 3), style === 'clan' ? 0xffb050 : 0xe0f8ff); }
+    // streets run between blocks at (i + 0.5) * BS; lamps stand on alternating kerbs mid-block with their arms over the road
+    const lampOk = (x, z) => Math.abs(x) <= lim && Math.abs(z) <= lim && Math.hypot(x, z) > plazaR + 4 && !(plat && Math.hypot(x, z) > 108) && !this.gateSpots.some(g => Math.hypot(g.x - x, g.z - z) < 16) && this.clearAt(x, z, 0.8);
+    for (let i = -5; i <= 4; i++) for (let j = -5; j <= 5; j++) {
+      const s = (i + j) % 2 ? 1 : -1, sx = (i + 0.5) * BS, sz = j * BS;
+      if (lampOk(sx + s * 4.8, sz)) this.lampPost(sx + s * 4.8, sz, lampCol, s > 0 ? -Math.PI / 2 : Math.PI / 2, { neon: neon[1] });
+      if (lampOk(sz, sx + s * 4.8)) this.lampPost(sz, sx + s * 4.8, lampCol, s > 0 ? Math.PI : 0, { neon: neon[1] });
+      for (let k = -5; k <= 4; k++) { const x = (i + 0.5) * BS + 5, z = (k + 0.5) * BS + 5; if (j === 0 && lampOk(x, z)) this.lampPost(x, z, lampCol, -Math.PI * 0.75, { neon: neon[2] || neon[1] }); }
+    }
     // plaza centerpiece
     const y0 = this.heightAt(0, 0);
     if (style === 'corp') {
@@ -1745,12 +1852,30 @@ class Zone {
       this.anims.push(t => rings.forEach((m, i) => { m.rotation.x = t * (0.3 + i * 0.2); m.rotation.y = t * 0.4 * (i % 2 ? 1 : -1); }));
       const holo = new THREE.Mesh(new THREE.PlaneGeometry(22, 5), new THREE.MeshBasicMaterial({ map: textTexture('CYREX CONSOLIDATED', '#7ae0ff', null, 1024, 160), transparent: true, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
       holo.position.set(0, y0 + 24, -18); this.group.add(holo); this.anims.push(t => { holo.rotation.y = t * 0.3; });
+      this.light(0, y0 + 15, -18, 0x4fd6ff, 24, 1.3, { pool: 7, gy: y0 });
     } else if (style === 'clan') {
       this.st(gCyl(3, 3.6, 1.6, 8), mat4(0, y0 + 0.8, -16), 0x4a3a30); this.gl(gCone(2.2, 4.5, 6), mat4(0, y0 + 3.6, -16), 0xff7a2a); this.gl(gCone(1.2, 3, 6), mat4(0, y0 + 4.5, -16), 0xffd04a); this.addBoxCol(0, -16, 7, 7, y0 - 1, y0 + 2);
       for (const s of [-1, 1]) { this.box(s * 9, y0, -18, 1.4, 12, 1.4, 0x5a4030); this.st(gBox(0.1, 6, 3), mat4(s * 9 + 0.8, y0 + 8, -18), 0xc83a2a); }
+      this.light(0, y0 + 4.5, -16, 0xff7a2a, 20, 1.8, { flicker: 0.3, pool: 7, gy: y0 });
     } else {
       this.st(gCyl(7, 7.6, 1.2, 16), mat4(0, y0 + 0.6, -16), 0xb8c0b0); this.gl(gCyl(6.2, 6.2, 0.2, 16), mat4(0, y0 + 1.1, -16), 0x7ae0e8); this.st(gCyl(0.8, 1.2, 5, 8), mat4(0, y0 + 2.5, -16), 0xd8dcd0); this.gl(gSph(1.2, 1), mat4(0, y0 + 5.6, -16), 0x9be37a); this.addBoxCol(0, -16, 14, 14, y0 - 1, y0 + 1.2);
-      for (let i = 0; i < 6; i++) { const a = 2.3 + i * 0.32, x = Math.cos(a) * 27, z = Math.sin(a) * 27, ry = -a + Math.PI / 2; this.box(x, y0, z, 2.6, 1.1, 1.4, 0x6a5a4a, ry); for (const s of [-1, 1]) this.st(gCyl(0.06, 0.06, 2.6, 4), mat4(x + Math.cos(ry) * s * 1.2, y0 + 1.3, z - Math.sin(ry) * s * 1.2), 0x3a3430); this.st(gBox(3.2, 0.15, 2.2), mat4(x, y0 + 2.7, z, 0.18, ry, 0), pick(r, [0xc83a3a, 0x3a8ac8, 0xe8c040, 0x5ab05a])); this.gl(gBox(0.5, 0.4, 0.5), mat4(x + 0.5, y0 + 1.3, z), pick(r, [0xff8a3a, 0x9be37a, 0x4fd6ff])); }
+      this.light(0, y0 + 4, -16, 0x7ae0e8, 18, 1.3, { pool: 7.5, gy: y0 });
+      for (let i = 0; i < 6; i++) { const a = 2.3 + i * 0.32, x = Math.cos(a) * 27, z = Math.sin(a) * 27, ry = -a + Math.PI / 2; this.box(x, y0, z, 2.6, 1.1, 1.4, 0x6a5a4a, ry); for (const s of [-1, 1]) this.st(gCyl(0.06, 0.06, 2.6, 4), mat4(x + Math.cos(ry) * s * 1.2, y0 + 1.3, z - Math.sin(ry) * s * 1.2), 0x3a3430); this.st(gBox(3.2, 0.15, 2.2), mat4(x, y0 + 2.7, z, 0.18, ry, 0), pick(r, [0xc83a3a, 0x3a8ac8, 0xe8c040, 0x5ab05a])); this.gl(gBox(0.5, 0.4, 0.5), mat4(x + 0.5, y0 + 1.3, z), pick(r, [0xff8a3a, 0x9be37a, 0x4fd6ff])); if (i % 2 === 0) this.light(x, y0 + 2.4, z, 0xffd8a0, 8, 0.9, { kind: 'lamp', pool: 3, gy: y0 }); }
+    }
+    for (let i = 0; i < 16; i++) {
+      const a = i / 16 * TAU + 0.2, x = Math.cos(a) * (plazaR - 0.8), z = Math.sin(a) * (plazaR - 0.8);
+      if (this.gateSpots.some(g => Math.abs(Math.atan2(Math.sin(Math.atan2(g.z, g.x) - a), Math.cos(Math.atan2(g.z, g.x) - a))) < 0.3)) continue; if (z > 4 && Math.abs(x) < 8) continue;
+      this.bollard(x, z, neon[i % 2 ? 0 : 1]);
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * TAU + Math.PI / 4, x = Math.cos(a) * (plazaR - 8), z = Math.sin(a) * (plazaR - 8), y = this.heightAt(x, z);
+      if (!this.clearAt(x, z, 1.5)) continue;
+      if (style === 'clan') { this.st(gCyl(1, 0.5, 1, 8), mat4(x, y + 2.6, z), 0x3a3028); this.st(gCyl(0.2, 0.3, 2.2, 6), mat4(x, y + 1.1, z), 0x3a3028); this.gl(gCone(0.8, 1.6, 6), mat4(x, y + 3.8, z), 0xff8a2a); this.addBoxCol(x, z, 2, 2, y - 1, y + 3);
+        this.light(x, y + 4.4, z, 0xff8a2a, 18, 1.6, { flicker: 0.3, pool: 6, gy: y }); continue; }
+      this.st(gBox(1.4, 12, 1.4), mat4(x, y + 6, z), 0x23272e); this.addBoxCol(x, z, 1.6, 1.6, y - 1, y + 12);
+      for (const [ox, oz] of [[0.74, 0], [-0.74, 0], [0, 0.74], [0, -0.74]]) this.gl(gBox(Math.abs(ox) ? 0.08 : 0.5, 9, Math.abs(oz) ? 0.08 : 0.5), mat4(x + ox, y + 6.5, z + oz), neon[i % 2 ? 1 : 0]);
+      this.gl(gTorus(1.6, 0.1, 4, 20), mat4(x, y + 12.4, z, Math.PI / 2, 0, 0), neon[0]);
+      this.light(x, y + 11, z, lampCol, 24, 1.5, { kind: 'lamp', pool: 7, gy: y });
     }
     // planters around the plaza
     const pl = []; for (let i = 0; i < 12; i++) { const a = i / 12 * TAU + 0.26, x = Math.cos(a) * (plazaR - 3), z = Math.sin(a) * (plazaR - 3); if (this.gateSpots.some(g => Math.hypot(g.x - x, g.z - z) < 70 && Math.abs(Math.atan2(g.z, g.x) - Math.atan2(z, x)) < 0.3)) continue; if (z > 4 && Math.abs(x) < 8) continue; const y = this.heightAt(x, z); this.box(x, y, z, 3.2, 0.9, 3.2, style === 'clan' ? 0x6a5040 : 0x5a6676); pl.push({ x, y: y + 0.8, z, s: rr(r, 0.7, 0.95), ry: r() * 3, c: style === 'clan' ? 0x8a8a3a : pick(r, [0x4f8a3a, 0x5aa048, 0x3f7a40]) }); }
@@ -1758,7 +1883,7 @@ class Zone {
     // POIs
     const fac = FACTIONS[style]; const facCol = fac.hex;
     const relay = buildRelay(facCol); relay.position.set(0, y0, 8); this.group.add(relay); this.addBoxCol(0, 8, 3, 3, y0 - 1, y0 + 11);
-    this.interact.push({ x: 0, z: 8, y: y0, r: 5, kind: 'relay', label: 'Use Relay Pylon' }); this.anims.push(t => relay.userData.rings.forEach((g, i) => g.rotation.z = t * (0.6 + i * 0.3) * (i % 2 ? -1 : 1)));
+    this.interact.push({ x: 0, z: 8, y: y0, r: 5, kind: 'relay', label: 'Use Relay Pylon' }); this.light(0, y0 + 9, 8, facCol, 16, 1, { pool: 5, gy: y0 }); this.anims.push(t => relay.userData.rings.forEach((g, i) => g.rotation.z = t * (0.6 + i * 0.3) * (i % 2 ? -1 : 1)));
     const k1 = buildKiosk('ARMS', 0xffc23a); k1.position.set(-15, y0, 0); k1.rotation.y = Math.PI / 2; this.group.add(k1); this.addBoxCol(-15, 0, 1.6, 2.6, y0 - 1, y0 + 2.4);
     this.interact.push({ x: -13.6, z: 0, y: y0, r: 3.4, kind: 'vendor', label: 'Browse Arms Vendor' });
     const k2 = buildKiosk('SUPPLY', 0x5cf0a0); k2.position.set(15, y0, 0); k2.rotation.y = -Math.PI / 2; this.group.add(k2); this.addBoxCol(15, 0, 1.6, 2.6, y0 - 1, y0 + 2.4);
@@ -1767,6 +1892,8 @@ class Zone {
     this.interact.push({ x: -9, z: 16, y: y0, r: 3.4, kind: 'terminal', label: 'Open Mission Terminal' }); this.anims.push(t => { tm.userData.rings[0].rotation.z = t; tm.userData.sign.lookAt(camera.position.x, tm.userData.sign.getWorldPosition(_v).y, camera.position.z); });
     const bo = buildBooth(); bo.position.set(10, y0, 16); this.group.add(bo); this.addBoxCol(10, 16, 2.4, 2.4, y0 - 1, y0 + 3.5); this.booths.push({ x: 10, z: 18.5 });
     this.arrivals._relay = { x: 0, z: 15, yaw: Math.PI }; this.arrivals._hub = this.arrivals._relay;
+    for (const [x, z, c] of [[-14, 0, 0xffc23a], [14, 0, 0x5cf0a0], [-9, 15, 0xffc23a], [10, 17.5, 0x5cf0a0]]) this.light(x, y0 + 2.6, z, c, 8, 0.7, { pool: 2.5, gy: y0 });
+    if (plat) for (let i = 0; i < 24; i++) { const a = i / 24 * TAU + 0.13, x = Math.cos(a) * 113, z = Math.sin(a) * 113; if (!this.gateSpots.some(g => Math.hypot(g.x - x, g.z - z) < 14)) this.bollard(x, z, neon[0]); }
     (this.def.dg || []).forEach((dg) => { const ang = r() * TAU; const s = { x: Math.cos(ang) * (plat ? 60 : 70), z: Math.sin(ang) * (plat ? 60 : 70) }; this.makeDoor(s, dg); });
     // hover cars
     if (style !== 'clan') for (let i = 0; i < (town ? 4 : 10); i++) {
@@ -1785,7 +1912,7 @@ class Zone {
 
   // ---------- DUNGEONS ----------
   buildDungeon() {
-    const d = this.def, r = this.rng, S = this.ds; const GW = 5, CS = 30, off = -(GW * CS) / 2 + CS / 2; const WH = 7.5;
+    const d = this.def, r = this.rng, dr = this.drng, S = this.ds; const GW = 5, CS = 30, off = -(GW * CS) / 2 + CS / 2; const WH = 7.5;
     const cells = []; for (let j = 0; j < GW; j++) for (let i = 0; i < GW; i++) cells.push({ i, j, links: new Set(), w: rr(r, 15, 24), d: rr(r, 15, 24) });
     const C = (i, j) => cells[j * GW + i];
     const start = C(0, 2); const stack = [start]; const vis = new Set([start]);
@@ -1806,8 +1933,12 @@ class Zone {
       wallWithGap(cx - hw, cz - hd, cx + hw, cz - hd, has(0, -1)); wallWithGap(cx - hw, cz + hd, cx + hw, cz + hd, has(0, 1));
       wallWithGap(cx - hw, cz - hd, cx - hw, cz + hd, has(-1, 0)); wallWithGap(cx + hw, cz - hd, cx + hw, cz + hd, has(1, 0));
       for (const n of c.links) { if (n.i < c.i || n.j < c.j) continue; const nx = off + n.i * CS, nzz = off + n.j * CS;
-        if (n.i > c.i) { const a = cx + hw, b = nx - n.w / 2; wall(a, cz - DW / 2 - 0.5, b, cz - DW / 2 - 0.5); wall(a, cz + DW / 2 + 0.5, b, cz + DW / 2 + 0.5); this.gl(gBox(Math.abs(b - a), 0.2, 0.2), mat4((a + b) / 2, WH - 0.6, cz - DW / 2), trim); }
-        else { const a = cz + hd, b = nzz - n.d / 2; wall(cx - DW / 2 - 0.5, a, cx - DW / 2 - 0.5, b); wall(cx + DW / 2 + 0.5, a, cx + DW / 2 + 0.5, b); this.gl(gBox(0.2, 0.2, Math.abs(b - a)), mat4(cx - DW / 2, WH - 0.6, (a + b) / 2), trim); } }
+        if (n.i > c.i) { const a = cx + hw, b = nx - n.w / 2; wall(a, cz - DW / 2 - 0.5, b, cz - DW / 2 - 0.5); wall(a, cz + DW / 2 + 0.5, b, cz + DW / 2 + 0.5); this.gl(gBox(Math.abs(b - a), 0.2, 0.2), mat4((a + b) / 2, WH - 0.6, cz - DW / 2), trim); this.light((a + b) / 2, WH - 1.6, cz, trim, 10, 0.8); }
+        else { const a = cz + hd, b = nzz - n.d / 2; wall(cx - DW / 2 - 0.5, a, cx - DW / 2 - 0.5, b); wall(cx + DW / 2 + 0.5, a, cx + DW / 2 + 0.5, b); this.gl(gBox(0.2, 0.2, Math.abs(b - a)), mat4(cx - DW / 2, WH - 0.6, (a + b) / 2), trim); this.light(cx, WH - 1.6, (a + b) / 2, trim, 10, 0.8); } }
+      // ceiling light panel; crypts and bunkers have failing wiring
+      const bad = d.st === 'crypt' || d.st === 'bunker' ? 0.35 : dr() < 0.15 ? 0.5 : 0;
+      this.st(gBox(Math.min(7, c.w * 0.35) + 0.4, 0.2, 1.6), mat4(cx, WH - 0.1, cz), 0x23272e); this.gl(gBox(Math.min(7, c.w * 0.35), 0.12, 1.2), mat4(cx, WH - 0.22, cz), S.light);
+      this.light(cx, WH - 1.4, cz, S.light, 18, 1.3, { pool: 6, gy: 0, flicker: bad });
       // light strips + deco
       this.gl(gBox(c.w - 2, 0.25, 0.2), mat4(cx, WH - 0.8, cz - hd + 0.6), trim); this.gl(gBox(c.w - 2, 0.25, 0.2), mat4(cx, WH - 0.8, cz + hd - 0.6), trim);
       if (c.w > 19 && c.d > 19) for (const [px, pz] of [[-1, -1], [1, 1], [1, -1], [-1, 1]]) { if (r() < 0.6) this.box(cx + px * c.w * 0.25, 0, cz + pz * c.d * 0.25, 1.6, WH, 1.6, d.st === 'hive' ? 0x8a4a9a : wallC); }
@@ -1819,20 +1950,21 @@ class Zone {
     const sx = start.x - start.w / 2 + 3; const portalTo = d.par; const pg = buildGate(ZMAP[portalTo].n, 0xc26bff, true); pg.scale.setScalar(0.7); pg.position.set(sx - 1.5, 0, start.z); pg.rotation.y = Math.PI / 2; this.group.add(pg);
     this.anims.push(t => { pg.userData.portal.material.opacity = 0.3 + Math.sin(t * 3) * 0.1; });
     this.triggers.push({ x: sx - 1.6, z: start.z, r: 2.2, to: portalTo, kind: 'gate' });
+    this.light(sx + 1, 4, start.z, 0xc26bff, 12, 1, { pool: 4, gy: 0 });
     const fl = [...start.links][0]; const fdx = fl.i - start.i, fdz = fl.j - start.j; this.arrivals[portalTo] = { x: start.x, z: start.z, yaw: Math.atan2(-fdx, -fdz) }; this.arrivals._relay = this.arrivals[portalTo]; this.arrivals._hub = this.arrivals[portalTo];
     const bo = buildBooth(); bo.position.set(start.x + 4, 0, start.z - start.d / 2 + 2.5); this.group.add(bo); this.addBoxCol(start.x + 4, start.z - start.d / 2 + 2.5, 2.4, 2.4, -1, 3.5); this.booths.push({ x: start.x + 4, z: start.z - start.d / 2 + 5 });
     this.gateSpots = [];
     const L = this.lvl; const pool = POOLS[d.st === 'hive' ? 'hive' : 'dungeon'];
     for (const c of cells) {
       if (c === start) continue;
-      if (c === bossCell) { this.spawnList.push({ type: d.boss[1], x: c.x, z: c.z, lvl: L[1] + 1, boss: true }); this.makeChest(c.x + 6, c.z + 6, true); this.bossSpot = { x: c.x, z: c.z }; continue; }
+      if (c === bossCell) { this.light(c.x, WH - 2, c.z, 0xff3a2a, 22, 1.2, { pulse: 2 }); this.spawnList.push({ type: d.boss[1], x: c.x, z: c.z, lvl: L[1] + 1, boss: true }); this.makeChest(c.x + 6, c.z + 6, true); this.bossSpot = { x: c.x, z: c.z }; continue; }
       const dd = dist.get(c) / dist.get(bossCell); const n = r() < 0.2 ? 0 : ri(r, 1, 3);
       for (let k = 0; k < n; k++) this.spawnList.push({ type: pick(r, pool), x: c.x + rr(r, -c.w / 3, c.w / 3), z: c.z + rr(r, -c.d / 3, c.d / 3), lvl: Math.round(lerp(L[0], L[1], dd)) });
       if (c.links.size === 1) this.makeChest(c.x + rr(r, -3, 3), c.z + rr(r, -3, 3), r() < 0.3);
     }
   }
 
-  update(t) { for (const a of this.anims) a(t); if (this.sky) this.sky.position.copy(camera.position); this.updateDay(); }
+  update(t) { for (const a of this.anims) a(t); if (this.sky) this.sky.position.copy(camera.position); this.updateDay(); this.updateLights(t); }
   dispose() {
     scene.remove(this.group); const cached = new Set(GEO.values()); Object.values(TREE_GEO).forEach(g => { if (g.trunk) cached.add(g.trunk); if (g.crown) cached.add(g.crown); });
     const mats = new Set(matCache.values());

@@ -121,6 +121,12 @@ function makeSky(top, hor, bot, sunDir, sunCol, opts = {}) {
 }
 
 // ---------- Canvas textures ----------
+function poolTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  for (const [s, a] of [[0, 0.52], [0.34, 0.52], [0.38, 0.3], [0.66, 0.3], [0.7, 0.12], [0.94, 0.12], [1, 0]]) g.addColorStop(s, `rgba(255,255,255,${a})`);
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+}
 function windowTexture(lit, wall, frame, seed) {
   const c = document.createElement('canvas'); c.width = 64; c.height = 64; const x = c.getContext('2d'); const r = mulberry32(seed);
   x.fillStyle = wall; x.fillRect(0, 0, 64, 64);
