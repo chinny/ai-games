@@ -188,6 +188,58 @@
   #briefObj li { margin: 3px 0; }
   .centerActions { justify-content: center; }
 
+  /* touch */
+  #tbar { position: absolute; left: 8px; bottom: 204px; display: none; gap: 6px; flex-wrap: wrap; max-width: calc(100vw - 230px); }
+  body.touch #tbar { display: flex; }
+  #tbar button { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 9px 13px; font-size: 15px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+  #tbar button.on { background: var(--brass); color: #1b160d; border-color: var(--brass); }
+  body.touch .cb .k, body.touch .pw .key { display: none; }
+  body.touch .pw { grid-template-columns: 1fr auto; }
+  body.touch #help .keyOnly { display: none; }
+  #help .touchOnly { display: none; }
+  body.touch #help .touchOnly { display: block; }
+  @media (max-height: 560px) {
+    #topbar { height: 34px; gap: 10px; }
+    .res { font-size: 18px; }
+    #objWrap { font-size: 14px; }
+    #weatherTag { display: none; }
+    #powers { top: 40px; gap: 4px; }
+    .pw { width: 150px; padding: 3px 6px; gap: 6px; }
+    .pw .nm { font-size: 14px; }
+    .pw .nm small { font-size: 11px; }
+    #alerts { top: 40px; width: min(360px, 50vw); }
+    .al { font-size: 14px; }
+    #bottom { height: 134px; padding: 6px; gap: 6px; }
+    #mmWrap { width: 118px; height: 118px; }
+    #selPanel { height: 120px; padding: 6px 8px; }
+    .selHead h3 { font-size: 20px; }
+    .selBody { margin-top: 4px; }
+    .selBody .desc { display: none; }
+    .chip { width: 54px; height: 38px; }
+    #cmd { width: 300px; grid-auto-rows: 38px; height: 122px; }
+    .cb { padding: 2px 4px; }
+    .cb .t { font-size: 12px; line-height: 1.05; padding-right: 0; }
+    .cb .c { position: absolute; right: 3px; bottom: 1px; font-size: 11px; }
+    #title { padding-top: 10px; }
+    #logo { font-size: 58px; }
+    .tagl { margin: 4px 0 12px; font-size: 14px; }
+    .mode { padding: 8px 12px; }
+    .mode h2 { font-size: 24px; }
+    .mode p { font-size: 14px; margin-top: 3px; }
+    .tlinks { margin-top: 10px; }
+    .big { padding: 7px 18px; font-size: 18px; }
+    .panelBox h1 { font-size: 34px; }
+    .nat p { display: none; }
+    #tbar { bottom: 140px; }
+    #tbar button { padding: 6px 10px; font-size: 13px; }
+    #modeHint { bottom: 186px; font-size: 14px; white-space: normal; max-width: 70vw; text-align: center; }
+  }
+  @media (max-width: 760px) { #tbar { bottom: 158px; max-width: calc(100vw - 16px); } #modeHint { bottom: 210px; } }
+
+  #rotate { position: absolute; inset: 0; z-index: 20; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px;
+    background: rgba(12,10,7,.94); }
+  #rotate p { color: var(--dim); font-size: 17px; max-width: 320px; }
+  @media (orientation: portrait) and (max-width: 640px) { body.touch[data-state="play"]:not(.rotateOK) #rotate { display: flex; } }
   #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(12,10,7,.9); font-family: 'Special Elite', monospace; font-size: 22px; color: var(--dim); }
   #fps { position: absolute; right: 8px; bottom: 2px; font: 11px monospace; color: #fff; opacity: .5; pointer-events: none; }
 
@@ -221,6 +273,7 @@
     <div id="alerts"></div>
     <div id="banner" class="fell"></div>
     <div id="modeHint" hidden></div>
+    <div id="tbar"><button data-a="army">Army</button><button data-a="eng">Engineer</button><button data-a="hq">HQ</button><button data-a="add">+ Select</button><button data-a="jump">Jump</button><button data-a="clear">✕</button></div>
     <div id="bottom">
       <div id="mmWrap"><canvas id="mm" width="360" height="360"></canvas></div>
       <div id="selPanel" class="empty"></div>
@@ -279,6 +332,23 @@
   <div id="help" class="screen" hidden>
     <div class="panelBox">
       <h1 class="fell">Field Manual</h1>
+      <div class="touchOnly">
+      <h3>Touch controls</h3>
+      <div class="cols">
+        <div><span>Select a unit or building</span><b>Tap it</b></div>
+        <div><span>Select every unit of that type on screen</span><b>Double-tap</b></div>
+        <div><span>Box-select</span><b>Hold, then drag</b></div>
+        <div><span>Move / attack / capture / repair</span><b>Tap the ground or a target</b></div>
+        <div><span>Pan</span><b>Drag one finger</b></div>
+        <div><span>Zoom and rotate</span><b>Pinch and twist</b></div>
+        <div><span>Place a building or power</span><b>Tap to preview, tap again</b></div>
+        <div><span>Trench or wire line</span><b>Drag it, or tap start then end</b></div>
+        <div><span>Button tooltip</span><b>Long-press the button</b></div>
+        <div><span>Look elsewhere / send units</span><b>Tap / double-tap the minimap</b></div>
+        <div><span>Army, engineer, HQ, add-to-selection, jump, cancel</span><b>Toolbar above the minimap</b></div>
+      </div>
+      </div>
+      <div class="keyOnly">
       <h3>Camera</h3>
       <div class="cols">
         <div><span>Pan</span><b>WASD / arrows / screen edge / middle-drag</b></div>
@@ -303,6 +373,7 @@
         <div><span>Next idle engineer</span><b>.</b></div>
         <div><span>Command powers</span><b>Y U I O</b></div>
         <div><span>Pause</span><b>Esc / P</b></div>
+      </div>
       </div>
       <h3>How the war works</h3>
       <p><b>Supply</b> comes from your HQ and every sector flag you hold. Infantry capture a flag by standing next to it with no enemies nearby. <b>Supply Depots</b> raise your population cap and let squads reinforce nearby.</p>
@@ -336,6 +407,7 @@
     </div>
   </div>
 
+  <div id="rotate"><div class="fell" style="font-size:34px">Turn your device sideways</div><p>Mud &amp; Iron needs a landscape screen to fit the battlefield and the command panel.</p><button class="big" id="rotateDismiss">Play anyway</button></div>
   <div id="loading" hidden>Surveying the sector&hellip;</div>
   <div id="fps"></div>
 </div>

@@ -193,6 +193,58 @@
   #briefObj li { margin: 3px 0; }
   .centerActions { justify-content: center; }
 
+  /* touch */
+  #tbar { position: absolute; left: 8px; bottom: 204px; display: none; gap: 6px; flex-wrap: wrap; max-width: calc(100vw - 230px); }
+  body.touch #tbar { display: flex; }
+  #tbar button { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 9px 13px; font-size: 15px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+  #tbar button.on { background: var(--brass); color: #1b160d; border-color: var(--brass); }
+  body.touch .cb .k, body.touch .pw .key { display: none; }
+  body.touch .pw { grid-template-columns: 1fr auto; }
+  body.touch #help .keyOnly { display: none; }
+  #help .touchOnly { display: none; }
+  body.touch #help .touchOnly { display: block; }
+  @media (max-height: 560px) {
+    #topbar { height: 34px; gap: 10px; }
+    .res { font-size: 18px; }
+    #objWrap { font-size: 14px; }
+    #weatherTag { display: none; }
+    #powers { top: 40px; gap: 4px; }
+    .pw { width: 150px; padding: 3px 6px; gap: 6px; }
+    .pw .nm { font-size: 14px; }
+    .pw .nm small { font-size: 11px; }
+    #alerts { top: 40px; width: min(360px, 50vw); }
+    .al { font-size: 14px; }
+    #bottom { height: 134px; padding: 6px; gap: 6px; }
+    #mmWrap { width: 118px; height: 118px; }
+    #selPanel { height: 120px; padding: 6px 8px; }
+    .selHead h3 { font-size: 20px; }
+    .selBody { margin-top: 4px; }
+    .selBody .desc { display: none; }
+    .chip { width: 54px; height: 38px; }
+    #cmd { width: 300px; grid-auto-rows: 38px; height: 122px; }
+    .cb { padding: 2px 4px; }
+    .cb .t { font-size: 12px; line-height: 1.05; padding-right: 0; }
+    .cb .c { position: absolute; right: 3px; bottom: 1px; font-size: 11px; }
+    #title { padding-top: 10px; }
+    #logo { font-size: 58px; }
+    .tagl { margin: 4px 0 12px; font-size: 14px; }
+    .mode { padding: 8px 12px; }
+    .mode h2 { font-size: 24px; }
+    .mode p { font-size: 14px; margin-top: 3px; }
+    .tlinks { margin-top: 10px; }
+    .big { padding: 7px 18px; font-size: 18px; }
+    .panelBox h1 { font-size: 34px; }
+    .nat p { display: none; }
+    #tbar { bottom: 140px; }
+    #tbar button { padding: 6px 10px; font-size: 13px; }
+    #modeHint { bottom: 186px; font-size: 14px; white-space: normal; max-width: 70vw; text-align: center; }
+  }
+  @media (max-width: 760px) { #tbar { bottom: 158px; max-width: calc(100vw - 16px); } #modeHint { bottom: 210px; } }
+
+  #rotate { position: absolute; inset: 0; z-index: 20; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px;
+    background: rgba(12,10,7,.94); }
+  #rotate p { color: var(--dim); font-size: 17px; max-width: 320px; }
+  @media (orientation: portrait) and (max-width: 640px) { body.touch[data-state="play"]:not(.rotateOK) #rotate { display: flex; } }
   #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(12,10,7,.9); font-family: 'Special Elite', monospace; font-size: 22px; color: var(--dim); }
   #fps { position: absolute; right: 8px; bottom: 2px; font: 11px monospace; color: #fff; opacity: .5; pointer-events: none; }
 
@@ -228,6 +280,7 @@
     <div id="alerts"></div>
     <div id="banner" class="fell"></div>
     <div id="modeHint" hidden></div>
+    <div id="tbar"><button data-a="army">Army</button><button data-a="eng">Engineer</button><button data-a="hq">HQ</button><button data-a="add">+ Select</button><button data-a="jump">Jump</button><button data-a="clear">✕</button></div>
     <div id="bottom">
       <div id="mmWrap"><canvas id="mm" width="360" height="360"></canvas></div>
       <div id="selPanel" class="empty"></div>
@@ -286,6 +339,23 @@
   <div id="help" class="screen" hidden>
     <div class="panelBox">
       <h1 class="fell">Field Manual</h1>
+      <div class="touchOnly">
+      <h3>Touch controls</h3>
+      <div class="cols">
+        <div><span>Select a unit or building</span><b>Tap it</b></div>
+        <div><span>Select every unit of that type on screen</span><b>Double-tap</b></div>
+        <div><span>Box-select</span><b>Hold, then drag</b></div>
+        <div><span>Move / attack / capture / repair</span><b>Tap the ground or a target</b></div>
+        <div><span>Pan</span><b>Drag one finger</b></div>
+        <div><span>Zoom and rotate</span><b>Pinch and twist</b></div>
+        <div><span>Place a building or power</span><b>Tap to preview, tap again</b></div>
+        <div><span>Trench or wire line</span><b>Drag it, or tap start then end</b></div>
+        <div><span>Button tooltip</span><b>Long-press the button</b></div>
+        <div><span>Look elsewhere / send units</span><b>Tap / double-tap the minimap</b></div>
+        <div><span>Army, engineer, HQ, add-to-selection, jump, cancel</span><b>Toolbar above the minimap</b></div>
+      </div>
+      </div>
+      <div class="keyOnly">
       <h3>Camera</h3>
       <div class="cols">
         <div><span>Pan</span><b>WASD / arrows / screen edge / middle-drag</b></div>
@@ -310,6 +380,7 @@
         <div><span>Next idle engineer</span><b>.</b></div>
         <div><span>Command powers</span><b>Y U I O</b></div>
         <div><span>Pause</span><b>Esc / P</b></div>
+      </div>
       </div>
       <h3>How the war works</h3>
       <p><b>Supply</b> comes from your HQ and every sector flag you hold. Infantry capture a flag by standing next to it with no enemies nearby. <b>Supply Depots</b> raise your population cap and let squads reinforce nearby.</p>
@@ -343,6 +414,7 @@
     </div>
   </div>
 
+  <div id="rotate"><div class="fell" style="font-size:34px">Turn your device sideways</div><p>Mud &amp; Iron needs a landscape screen to fit the battlefield and the command panel.</p><button class="big" id="rotateDismiss">Play anyway</button></div>
   <div id="loading" hidden>Surveying the sector&hellip;</div>
   <div id="fps"></div>
 </div>
@@ -5076,7 +5148,10 @@ function setMode(m, md) {
     buildmenu: () => 'Choose a building to construct',
   };
   hudEl.hint.hidden = !m;
-  hudEl.hint.textContent = hints[m] ? hints[m]() : '';
+  let txt = hints[m] ? hints[m]() : '';
+  if (UI.lastInput === 'touch') txt = txt.replace(/left-click/g, 'tap').replace('(or click start and end)', '(or tap start and end)').replace(/ Shift to [^.]*\./g, '').replace('Esc to cancel', '✕ cancels');
+  hudEl.hint.textContent = txt;
+  if (typeof TOUCH !== 'undefined') TOUCH.confirm = null;
   UI.cardSig = '';
   UI.powersHTML = '';
 }
@@ -5084,6 +5159,7 @@ const GHOST_MAT = new THREE.MeshBasicMaterial({ color: 0x66ff66, transparent: tr
 
 // ---------- tooltips ----------
 function showTip(ev, html) {
+  if (UI.lastInput === 'touch' && !TOUCH.tipOK) return;
   const t = hudEl.tip;
   t.innerHTML = html; t.style.display = 'block';
   const r = t.getBoundingClientRect();
@@ -5115,7 +5191,7 @@ function updateSelPanel() {
   const el = hudEl.sel;
   const list = SEL.filter((e) => !e.dead);
   if (!list.length) {
-    if (UI.panelSig !== 'none') { UI.panelSig = 'none'; el.className = 'empty'; el.innerHTML = '<div style="color:var(--dim);font-size:15px;padding-top:40px;text-align:center">Select units or buildings. Right-click to give orders.</div>'; }
+    if (UI.panelSig !== 'none') { UI.panelSig = 'none'; el.className = 'empty'; el.innerHTML = '<div style="color:var(--dim);font-size:15px;padding-top:40px;text-align:center">' + (UI.lastInput === 'touch' ? 'Tap units to select them, then tap the ground or an enemy to give orders.' : 'Select units or buildings. Right-click to give orders.') + '</div>'; }
     return;
   }
   el.className = '';
@@ -5266,7 +5342,7 @@ function pickEnt(sx, sy, teamOnly) {
         if (!m.alive) continue;
         if (!project(m.x, m.y + 1.1, m.z, _sp)) continue;
         const d = Math.hypot(_sp.x - sx, _sp.y - sy);
-        if (d < 16 && d < bd) { bd = d; best = e; }
+        if (d < (UI.lastInput === 'touch' ? 30 : 16) && d < bd) { bd = d; best = e; }
       }
     } else if (e.kind === 'veh') {
       if (!project(e.x, e.y + 1.2, e.z, _sp)) continue;
@@ -5403,6 +5479,7 @@ function bindInput() {
   const cv = canvas;
   cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
   addEventListener('mousemove', (ev) => {
+    if (ev.movementX || ev.movementY) UI.lastInput = 'mouse';
     UI.mx = ev.clientX; UI.my = ev.clientY;
     if (UI.drag) { UI.drag.x1 = ev.clientX; UI.drag.y1 = ev.clientY; }
     if (CAM.mdrag) { CAM.mdrag.dx += ev.movementX; CAM.mdrag.dy += ev.movementY; }
@@ -5520,39 +5597,6 @@ function bindInput() {
   addEventListener('mousemove', (ev) => { if (UI.mmDrag) { const p = mmPos(ev); CAM.x = p.x; CAM.z = p.z; } });
   addEventListener('mouseup', () => { UI.mmDrag = false; });
 
-  // touch: one finger pans or taps, two fingers zoom
-  let touches = {}, tapStart = null, pinch = null;
-  cv.addEventListener('touchstart', (ev) => {
-    audioInit();
-    for (const t of ev.changedTouches) touches[t.identifier] = { x: t.clientX, y: t.clientY };
-    const ids = Object.keys(touches);
-    if (ids.length === 1) { const t = ev.changedTouches[0]; tapStart = { x: t.clientX, y: t.clientY, t: performance.now(), moved: false }; }
-    if (ids.length === 2) { const [a, b] = ids.map((i) => touches[i]); pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: CAM.tdist }; tapStart = null; }
-    ev.preventDefault();
-  }, { passive: false });
-  cv.addEventListener('touchmove', (ev) => {
-    for (const t of ev.changedTouches) {
-      const o = touches[t.identifier]; if (!o) continue;
-      const dx = t.clientX - o.x, dy = t.clientY - o.y;
-      if (Object.keys(touches).length === 1) { panBy(-dx, -dy); if (tapStart && Math.hypot(t.clientX - tapStart.x, t.clientY - tapStart.y) > 10) tapStart.moved = true; }
-      o.x = t.clientX; o.y = t.clientY;
-    }
-    if (pinch) { const ids = Object.keys(touches); if (ids.length === 2) { const [a, b] = ids.map((i) => touches[i]); CAM.tdist = clamp(pinch.dist * pinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 26, 170); } }
-    ev.preventDefault();
-  }, { passive: false });
-  cv.addEventListener('touchend', (ev) => {
-    for (const t of ev.changedTouches) delete touches[t.identifier];
-    if (!Object.keys(touches).length) pinch = null;
-    if (tapStart && !tapStart.moved && performance.now() - tapStart.t < 400 && GAME.state === 'play') {
-      const t = ev.changedTouches[0];
-      if (UI.mode && leftAction(t.clientX, t.clientY, false)) { tapStart = null; return; }
-      const e = pickEnt(t.clientX, t.clientY);
-      if (e && e.team === 0) selectOnly([e]);
-      else if (SEL.length) rightClick(t.clientX, t.clientY, false);
-      else if (e) selectOnly([e]);
-    }
-    tapStart = null;
-  });
 }
 function centerOn(list) {
   if (!list.length) return;
@@ -5807,6 +5851,199 @@ function drawOverlay(dt) {
   }
 }
 
+// Mud & Iron — touchscreen controls. Tap to select and command, drag to pan, pinch to zoom, twist to rotate,
+// long-press and drag to box-select, double-tap to select a type, tap twice to confirm a building or power,
+// long-press a button for its tooltip, plus a toolbar for the actions that otherwise need a keyboard.
+
+const TOUCH = { on: false, pts: new Map(), tap: null, two: null, box: false, longT: 0, addSel: false, confirm: null, lastTap: { t: 0, id: 0 }, tipOK: false, suppress: false, mmTap: 0, longMs: 420, tapMs: 450, dblMs: 350 };
+UI.lastInput = isTouch ? 'touch' : 'mouse';
+
+function enableTouchUI() {
+  UI.lastInput = 'touch';
+  if (TOUCH.on) return;
+  TOUCH.on = true;
+  document.body.classList.add('touch');
+  const c = $('.credit');
+  if (c) c.innerHTML = 'Touch: tap to select and command, drag to pan, pinch to zoom. Best in landscape. Part of <a href="../">Chinny\'s AI Games</a>.';
+}
+
+const tpos = (t) => ({ x: t.clientX, y: t.clientY });
+function twoInfo() {
+  const [a, b] = [...TOUCH.pts.values()];
+  return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y), a: Math.atan2(b.y - a.y, b.x - a.x) };
+}
+function touchHint(text) { hudEl.hint.hidden = false; hudEl.hint.textContent = text; }
+
+function onTap(x, y) {
+  UI.mx = x; UI.my = y; UI.inView = true;
+  const m = UI.mode;
+  // placements: first tap shows the preview, a second tap on the same spot confirms
+  if (m === 'build' || m === 'power') {
+    const c = TOUCH.confirm;
+    if (c && c.mode === m && Math.hypot(c.x - x, c.y - y) < 46) { TOUCH.confirm = null; leftAction(x, y, false); return; }
+    TOUCH.confirm = { x, y, mode: m };
+    touchHint(m === 'build' ? 'Tap again on the same spot to build here' : 'Tap again on the same spot to call it in');
+    return;
+  }
+  if (m === 'line') {
+    if (!pickGround(x, y, _v4)) return;
+    if (UI.md.start) { commitLine(UI.md.start.x, UI.md.start.z, _v4.x, _v4.z); setMode(null); }
+    else { UI.md.start = { x: _v4.x, z: _v4.z, sx: x, sy: y, down: false }; touchHint('Now tap where the line should end, or drag it out'); }
+    return;
+  }
+  if (m && m !== 'buildmenu') { leftAction(x, y, TOUCH.addSel); return; }
+  const e = pickEnt(x, y);
+  const own = SEL.filter((o) => !o.dead && o.team === 0);
+  const engs = own.filter((o) => o.kind === 'squad' && o.def.eng);
+  const now = performance.now();
+  if (e && e.team === 0) {
+    // engineers tapping a damaged or unfinished friendly vehicle/building get to work on it
+    if (engs.length && e.kind !== 'squad' && !SEL.includes(e) && (e.hp < e.maxhp || e.broken > 0 || (e.kind === 'bld' && e.built < 1))) { rightClick(x, y, false); return; }
+    if (now - TOUCH.lastTap.t < TOUCH.dblMs && TOUCH.lastTap.id === e.id) selectOnly(ENTS.filter((o) => !o.dead && o.team === 0 && o.type === e.type && onScreen(o)));
+    else if (TOUCH.addSel) { const k = SEL.indexOf(e); if (k >= 0) SEL.splice(k, 1); else if (!SEL.some((o) => o.team !== 0)) SEL.push(e); else selectOnly([e]); UI.cardSig = ''; UI.panelSig = ''; }
+    else selectOnly([e]);
+    TOUCH.lastTap = { t: now, id: e.id };
+    return;
+  }
+  if (own.length) { rightClick(x, y, false); return; }
+  if (e) selectOnly([e]);
+}
+
+function bindTouch() {
+  if (isTouch) enableTouchUI();
+  addEventListener('touchstart', () => enableTouchUI(), { capture: true, passive: true });
+  const cv = canvas;
+  cv.addEventListener('touchstart', (ev) => {
+    ev.preventDefault();
+    audioInit(); hideTip();
+    for (const t of ev.changedTouches) TOUCH.pts.set(t.identifier, tpos(t));
+    clearTimeout(TOUCH.longT);
+    if (GAME.state !== 'play') return;
+    if (TOUCH.pts.size === 1) {
+      const p = tpos(ev.changedTouches[0]);
+      TOUCH.tap = { ...p, t: performance.now(), moved: false };
+      UI.mx = p.x; UI.my = p.y; UI.inView = true;
+      if (UI.mode === 'line' && !UI.md.start && pickGround(p.x, p.y, _v4)) UI.md.start = { x: _v4.x, z: _v4.z, sx: p.x, sy: p.y, down: true };
+      else if (!UI.mode) {
+        // hold still to start a selection box
+        TOUCH.longT = setTimeout(() => {
+          if (!TOUCH.tap || TOUCH.tap.moved || TOUCH.pts.size !== 1) return;
+          TOUCH.box = true; TOUCH.tap = null;
+          UI.drag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y, shift: TOUCH.addSel };
+          if (navigator.vibrate) navigator.vibrate(12);
+        }, TOUCH.longMs);
+      }
+    } else if (TOUCH.pts.size === 2) {
+      TOUCH.tap = null; TOUCH.box = false; UI.drag = null;
+      if (UI.mode === 'line' && UI.md.start && UI.md.start.down) UI.md.start = null;
+      const i = twoInfo();
+      TOUCH.two = { ...i, dist: CAM.tdist, yaw: CAM.yaw };
+    }
+  }, { passive: false });
+  cv.addEventListener('touchmove', (ev) => {
+    ev.preventDefault();
+    const prev = new Map(TOUCH.pts);
+    for (const t of ev.changedTouches) if (TOUCH.pts.has(t.identifier)) TOUCH.pts.set(t.identifier, tpos(t));
+    if (GAME.state !== 'play') return;
+    if (TOUCH.pts.size === 2 && TOUCH.two) {
+      const i = twoInfo(), s = TOUCH.two;
+      CAM.tdist = clamp(s.dist * s.d / Math.max(20, i.d), 26, 170);
+      CAM.yaw = s.yaw + angWrap(i.a - s.a);
+      panBy(-(i.cx - s.cx), -(i.cy - s.cy));
+      s.cx = i.cx; s.cy = i.cy;
+      return;
+    }
+    if (TOUCH.pts.size !== 1) return;
+    const t = ev.changedTouches[0], p = tpos(t), o = prev.get(t.identifier) || p;
+    UI.mx = p.x; UI.my = p.y;
+    if (TOUCH.box) { UI.drag.x1 = p.x; UI.drag.y1 = p.y; return; }
+    if (UI.mode === 'line' && UI.md.start && UI.md.start.down) { if (TOUCH.tap && Math.hypot(p.x - TOUCH.tap.x, p.y - TOUCH.tap.y) > 10) TOUCH.tap.moved = true; return; }
+    if (TOUCH.tap && Math.hypot(p.x - TOUCH.tap.x, p.y - TOUCH.tap.y) > 10) { TOUCH.tap.moved = true; clearTimeout(TOUCH.longT); }
+    if (!TOUCH.tap || TOUCH.tap.moved) panBy(-(p.x - o.x), -(p.y - o.y));
+  }, { passive: false });
+  const end = (ev) => {
+    ev.preventDefault();
+    for (const t of ev.changedTouches) TOUCH.pts.delete(t.identifier);
+    clearTimeout(TOUCH.longT);
+    if (TOUCH.pts.size < 2) TOUCH.two = null;
+    if (GAME.state !== 'play' || TOUCH.pts.size) return;
+    const t = ev.changedTouches[0], p = tpos(t);
+    if (TOUCH.box) {
+      const d = UI.drag; TOUCH.box = false; UI.drag = null;
+      if (d && Math.hypot(d.x1 - d.x0, d.y1 - d.y0) > 12) boxSelect(d.x0, d.y0, d.x1, d.y1, TOUCH.addSel);
+      else if (d) onTap(d.x0, d.y0);
+      return;
+    }
+    if (UI.mode === 'line' && UI.md.start && UI.md.start.down) {
+      UI.md.start.down = false;
+      if (TOUCH.tap && TOUCH.tap.moved && pickGround(p.x, p.y, _v4)) { commitLine(UI.md.start.x, UI.md.start.z, _v4.x, _v4.z); setMode(null); }
+      else touchHint('Now tap where the line should end, or drag it out');
+      TOUCH.tap = null;
+      return;
+    }
+    // with a targeting mode armed there is no long-press, so slower taps still count
+    if (TOUCH.tap && !TOUCH.tap.moved && performance.now() - TOUCH.tap.t < (UI.mode ? TOUCH.tapMs * 2.5 : TOUCH.tapMs)) onTap(p.x, p.y);
+    TOUCH.tap = null;
+  };
+  cv.addEventListener('touchend', end, { passive: false });
+  cv.addEventListener('touchcancel', (ev) => { for (const t of ev.changedTouches) TOUCH.pts.delete(t.identifier); TOUCH.tap = null; TOUCH.two = null; TOUCH.box = false; UI.drag = null; clearTimeout(TOUCH.longT); });
+
+  // minimap: tap or drag to look, double-tap to send the selection there
+  const mm = $('#mm');
+  const mmPos = (t) => { const r = mm.getBoundingClientRect(); return { x: clamp((t.clientX - r.left) / r.width, 0, 1) * MAP.W, z: clamp((t.clientY - r.top) / r.height, 0, 1) * MAP.H }; };
+  mm.addEventListener('touchstart', (ev) => {
+    ev.preventDefault();
+    if (GAME.state !== 'play') return;
+    const p = mmPos(ev.changedTouches[0]), now = performance.now();
+    if (UI.mode === 'power') { usePower(0, UI.md.k, p.x, p.z); setMode(null); return; }
+    const own = SEL.filter((e) => !e.dead && e.team === 0);
+    if (now - TOUCH.mmTap < TOUCH.dblMs && own.length) {
+      if (own.every((e) => e.kind === 'bld')) for (const b of own) b.rally = { x: p.x, z: p.z };
+      else orderMove(own, p.x, p.z, false, UI.mode === 'amove');
+      if (UI.mode === 'amove') setMode(null);
+      marker(p.x, p.z, '#7dff7a'); sfx('click');
+      TOUCH.mmTap = 0;
+      return;
+    }
+    TOUCH.mmTap = now;
+    CAM.x = p.x; CAM.z = p.z;
+  }, { passive: false });
+  mm.addEventListener('touchmove', (ev) => { ev.preventDefault(); if (GAME.state !== 'play') return; const p = mmPos(ev.changedTouches[0]); CAM.x = p.x; CAM.z = p.z; TOUCH.mmTap = 0; }, { passive: false });
+
+  // long-press a command or power button to read its tooltip instead of pressing it
+  for (const el of [hudEl.cmd, hudEl.powers]) {
+    el.addEventListener('touchstart', (ev) => {
+      const b = ev.target.closest('.cb, .pw');
+      TOUCH.suppress = false;
+      if (!b) return;
+      const t = ev.touches[0], pos = { clientX: t.clientX, clientY: t.clientY };
+      clearTimeout(TOUCH.btnT);
+      TOUCH.btnT = setTimeout(() => { if (b.onmouseenter) { TOUCH.tipOK = true; b.onmouseenter(pos); TOUCH.tipOK = false; TOUCH.suppress = true; } }, 450);
+    }, { passive: true });
+    el.addEventListener('touchend', () => { clearTimeout(TOUCH.btnT); if (TOUCH.suppress) setTimeout(hideTip, 1800); }, { passive: true });
+    el.addEventListener('click', (ev) => { if (TOUCH.suppress) { ev.stopPropagation(); ev.preventDefault(); TOUCH.suppress = false; } }, true);
+  }
+
+  // toolbar for things a keyboard would do
+  $('#rotateDismiss').onclick = () => document.body.classList.add('rotateOK');
+  const bar = $('#tbar');
+  bar.addEventListener('click', (ev) => {
+    const b = ev.target.closest('button');
+    if (!b || GAME.state !== 'play') return;
+    sfx('click');
+    const a = b.dataset.a;
+    if (a === 'army') selectOnly(ENTS.filter((e) => !e.dead && e.team === 0 && e.kind !== 'bld' && !(e.kind === 'squad' && e.def.eng)));
+    else if (a === 'eng') {
+      const idle = ENTS.filter((e) => !e.dead && e.team === 0 && e.kind === 'squad' && e.def.eng && !e.order);
+      const list = idle.length ? idle : ENTS.filter((e) => !e.dead && e.team === 0 && e.kind === 'squad' && e.def.eng);
+      if (list.length) { UI.engI = ((UI.engI || 0) + 1) % list.length; selectOnly([list[UI.engI]]); centerOn([list[UI.engI]]); }
+    } else if (a === 'hq') { const h = TEAMS[0].hq; if (h && !h.dead) { selectOnly([h]); centerOn([h]); } }
+    else if (a === 'add') { TOUCH.addSel = !TOUCH.addSel; b.classList.toggle('on', TOUCH.addSel); }
+    else if (a === 'jump') jumpCamera();
+    else if (a === 'clear') { TOUCH.confirm = null; if (UI.mode) setMode(UI.mode === 'build' ? 'buildmenu' : null); else selectOnly([]); }
+  });
+}
+
 // Mud & Iron — RTS camera, simulation loop, title-screen battle and debug hook
 
 const CAM = { x: 160, z: 200, yaw: Math.PI, pitch: 0.95, dist: 95, tdist: 95, mdrag: null, gy: 3 };
@@ -5826,7 +6063,7 @@ function updateCamera(dt, free) {
     if (keys.KeyS || keys.ArrowDown) mz -= 1;
     if (keys.KeyA || keys.ArrowLeft) mx -= 1;
     if (keys.KeyD || keys.ArrowRight) mx += 1;
-    if (UI.inView && !UI.drag && document.hasFocus()) {
+    if (UI.inView && !UI.drag && UI.lastInput === 'mouse' && document.hasFocus()) {
       const m = 6;
       if (UI.mx <= m) mx -= 1; else if (UI.mx >= VW - m) mx += 1;
       if (UI.my <= m) mz += 1; else if (UI.my >= VH - m) mz -= 1;
@@ -5953,6 +6190,7 @@ resize();
 addEventListener('resize', resize);
 bindMenus();
 bindInput();
+bindTouch();
 startTitleScene();
 showScreen('title');
 requestAnimationFrame(frame);
@@ -5965,6 +6203,8 @@ if (DEBUG) {
     start(cfg) { launch(Object.assign({ mode: 'skirmish', nation: 'gb', enemy: 'de', size: 'm', diff: 'normal', weather: 'clear', fog: true, seed: 1234 }, cfg)); },
     initAI, acquire, visibleTo, VIS, coverAt, terrainH, groundH, pickEnt, rightClick, boxSelect,
     spawnUnit, spawnBuilding, giveOrder, orderMove, useAbility, usePower, setMode, selectOnly, endMatch, startTitleScene, findPath, lineCells, orderLine, orderBuild, canPlace,
+    screenOf(x, y, z) { const o = { x: 0, y: 0 }; project(x, y, z, o); return o; },
+    TOUCH,
     units: (team) => ENTS.filter((e) => !e.dead && (team === undefined || e.team === team)),
     render() { syncRender(); renderer.render(scene, camera); },
   };

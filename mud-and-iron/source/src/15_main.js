@@ -17,7 +17,7 @@ function updateCamera(dt, free) {
     if (keys.KeyS || keys.ArrowDown) mz -= 1;
     if (keys.KeyA || keys.ArrowLeft) mx -= 1;
     if (keys.KeyD || keys.ArrowRight) mx += 1;
-    if (UI.inView && !UI.drag && document.hasFocus()) {
+    if (UI.inView && !UI.drag && UI.lastInput === 'mouse' && document.hasFocus()) {
       const m = 6;
       if (UI.mx <= m) mx -= 1; else if (UI.mx >= VW - m) mx += 1;
       if (UI.my <= m) mz += 1; else if (UI.my >= VH - m) mz -= 1;
@@ -144,6 +144,7 @@ resize();
 addEventListener('resize', resize);
 bindMenus();
 bindInput();
+bindTouch();
 startTitleScene();
 showScreen('title');
 requestAnimationFrame(frame);
@@ -156,6 +157,8 @@ if (DEBUG) {
     start(cfg) { launch(Object.assign({ mode: 'skirmish', nation: 'gb', enemy: 'de', size: 'm', diff: 'normal', weather: 'clear', fog: true, seed: 1234 }, cfg)); },
     initAI, acquire, visibleTo, VIS, coverAt, terrainH, groundH, pickEnt, rightClick, boxSelect,
     spawnUnit, spawnBuilding, giveOrder, orderMove, useAbility, usePower, setMode, selectOnly, endMatch, startTitleScene, findPath, lineCells, orderLine, orderBuild, canPlace,
+    screenOf(x, y, z) { const o = { x: 0, y: 0 }; project(x, y, z, o); return o; },
+    TOUCH,
     units: (team) => ENTS.filter((e) => !e.dead && (team === undefined || e.team === team)),
     render() { syncRender(); renderer.render(scene, camera); },
   };
