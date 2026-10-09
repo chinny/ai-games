@@ -1,0 +1,341 @@
+<title>Mud &amp; Iron</title>
+<meta name="description" content="A Great War real-time strategy game: dig trenches, string wire, call in barrages and send the tanks over the top.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Special+Elite&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #efe6cf; --dim: #b3a88c; --mud: #2a241b; --panel: rgba(24,20,14,.86); --panel2: rgba(40,34,24,.92); --line: rgba(239,230,207,.18);
+    --brass: #d8b45a; --red: #c8452f; --green: #8fbf5a; --blue: #7fa6d8; --gas: #c9d45a; }
+  html, body { margin: 0; height: 100%; background: #1b1812; overflow: hidden; color: var(--ink);
+    font-family: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif; -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent; touch-action: none; }
+  [hidden] { display: none !important; }
+  #app { position: fixed; inset: 0; }
+  #c, #ov { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #ov { pointer-events: none; }
+  .fell { font-family: 'IM Fell English SC', Georgia, serif; font-weight: 400; }
+  .type { font-family: 'Special Elite', 'Courier New', monospace; }
+  button { font: inherit; color: inherit; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: absolute; inset: 0; pointer-events: none; display: none; }
+  body[data-state="play"] #hud { display: block; }
+  #hud > * { pointer-events: auto; }
+  #topbar { position: absolute; left: 0; right: 0; top: 0; height: 40px; display: flex; align-items: center; gap: 18px; padding: 0 12px;
+    background: linear-gradient(180deg, rgba(18,15,10,.92), rgba(18,15,10,.7)); border-bottom: 1px solid var(--line); box-sizing: border-box; }
+  .res { display: flex; align-items: baseline; gap: 6px; font-size: 22px; font-weight: 700; white-space: nowrap; }
+  .res small { font-size: 14px; color: var(--dim); font-weight: 600; letter-spacing: .08em; }
+  .res .ic { width: 12px; height: 12px; border-radius: 2px; display: inline-block; align-self: center; }
+  #supply { color: var(--brass); }
+  #pop.full { color: var(--red); }
+  #objWrap { flex: 1; text-align: center; font-size: 17px; font-weight: 600; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #objWrap b { color: var(--brass); }
+  #weatherTag { font-size: 15px; color: var(--dim); letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+  .tbtn { background: rgba(239,230,207,.08); border: 1px solid var(--line); border-radius: 3px; padding: 4px 12px; cursor: pointer; font-size: 15px; letter-spacing: .1em; text-transform: uppercase; }
+  .tbtn:hover { background: rgba(239,230,207,.18); }
+  #speedBtn { min-width: 44px; }
+
+  #powers { position: absolute; right: 10px; top: 48px; display: flex; flex-direction: column; gap: 6px; }
+  .pw { position: relative; width: 196px; display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 8px; padding: 5px 8px; box-sizing: border-box;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; overflow: hidden; text-align: left; }
+  .pw:hover:not(.off) { border-color: var(--brass); }
+  .pw.off { opacity: .45; cursor: default; }
+  .pw.armed { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass); }
+  .pw .key { font-size: 13px; color: var(--dim); border: 1px solid var(--line); border-radius: 2px; text-align: center; }
+  .pw .nm { font-size: 16px; font-weight: 700; line-height: 1; }
+  .pw .nm small { display: block; font-size: 12px; color: var(--dim); font-weight: 600; letter-spacing: .05em; margin-top: 2px; }
+  .pw .cost { font-size: 15px; color: var(--brass); font-weight: 700; }
+  .pw .cd { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--brass); }
+
+  #alerts { position: absolute; left: 12px; top: 50px; width: min(420px, 60vw); display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+  .al { font-size: 16px; font-weight: 600; padding: 3px 10px; background: rgba(18,15,10,.72); border-left: 3px solid var(--brass); text-shadow: 0 1px 0 #000;
+    animation: alIn .25s ease-out; transition: opacity .6s; }
+  .al.bad { border-color: var(--red); }
+  .al.good { border-color: var(--green); }
+  .al.out { opacity: 0; }
+  @keyframes alIn { from { transform: translateX(-12px); opacity: 0; } }
+
+  #banner { position: absolute; left: 0; right: 0; top: 22%; text-align: center; pointer-events: none; font-size: clamp(34px, 6vw, 70px);
+    color: var(--ink); text-shadow: 0 3px 0 rgba(0,0,0,.6), 0 0 30px rgba(0,0,0,.6); opacity: 0; transform: scale(1.06); transition: opacity .4s, transform .4s; }
+  #banner.on { opacity: 1; transform: none; }
+  #banner small { display: block; font-family: 'Special Elite', monospace; font-size: clamp(15px, 1.8vw, 20px); color: var(--dim); margin-top: 6px; }
+
+  #bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 196px; display: flex; gap: 8px; padding: 8px; box-sizing: border-box; pointer-events: none; align-items: flex-end; }
+  #bottom > * { pointer-events: auto; }
+  #mmWrap { width: 180px; height: 180px; flex: none; background: #000; border: 2px solid #4a4030; box-shadow: 0 0 0 1px #000, 0 4px 20px rgba(0,0,0,.5); position: relative; }
+  #mm { width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #selPanel { flex: 1; height: 150px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; box-sizing: border-box; overflow: hidden; min-width: 0; }
+  #selPanel.empty { background: rgba(24,20,14,.5); }
+  .selHead { display: flex; align-items: baseline; gap: 10px; }
+  .selHead h3 { margin: 0; font-size: 26px; line-height: 1; font-weight: 400; }
+  .selHead .sub { font-size: 15px; color: var(--dim); }
+  .selBody { display: flex; gap: 14px; margin-top: 8px; font-size: 15px; }
+  .selBody .desc { flex: 1; color: var(--dim); line-height: 1.25; max-height: 76px; overflow: hidden; font-size: 14px; }
+  .stats { display: grid; grid-template-columns: auto auto; column-gap: 10px; row-gap: 1px; font-size: 15px; white-space: nowrap; }
+  .stats span { color: var(--dim); }
+  .hpbar { height: 6px; background: rgba(0,0,0,.6); border: 1px solid var(--line); margin-top: 6px; position: relative; }
+  .hpbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--green); }
+  .hpbar.sup i { background: var(--brass); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; max-height: 104px; overflow: hidden; margin-top: 6px; }
+  .chip { width: 62px; height: 46px; border: 1px solid var(--line); border-radius: 3px; background: rgba(0,0,0,.35); font-size: 13px; line-height: 1.05; padding: 3px 4px; box-sizing: border-box; cursor: pointer; position: relative; overflow: hidden; }
+  .chip:hover { border-color: var(--brass); }
+  .chip b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip .hb { position: absolute; left: 3px; right: 3px; bottom: 3px; height: 4px; background: rgba(0,0,0,.6); }
+  .chip .hb i { display: block; height: 100%; background: var(--green); }
+  .chip .vs { color: var(--brass); font-size: 11px; letter-spacing: -.05em; }
+  .chip.pinned { border-color: var(--brass); }
+  .chip.broken { border-color: var(--red); }
+  .queue { display: flex; gap: 4px; margin-top: 8px; }
+  .qi { width: 54px; height: 30px; border: 1px solid var(--line); border-radius: 3px; background: rgba(0,0,0,.35); font-size: 12px; position: relative; overflow: hidden; padding: 2px 4px; box-sizing: border-box; cursor: pointer; line-height: 1.05; }
+  .qi i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--brass); }
+  .tagline { display: inline-block; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; padding: 1px 6px; border-radius: 2px; margin-left: 4px; }
+  .tag-pin { background: rgba(216,180,90,.25); color: var(--brass); }
+  .tag-brk { background: rgba(200,69,47,.3); color: #ff9a85; }
+  .tag-ret { background: rgba(127,166,216,.25); color: var(--blue); }
+
+  #cmd { width: 330px; flex: none; display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 54px; gap: 4px; align-content: end; height: 180px; }
+  .cb { position: relative; background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; padding: 3px 4px; box-sizing: border-box;
+    text-align: left; font-size: 13px; line-height: 1.05; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; }
+  .cb:hover:not(.off) { border-color: var(--brass); background: rgba(70,58,38,.95); }
+  .cb.off { opacity: .4; cursor: default; }
+  .cb.armed { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+  .cb .k { position: absolute; right: 3px; top: 2px; font-size: 11px; color: var(--dim); }
+  .cb .t { font-size: 14px; font-weight: 700; padding-right: 10px; }
+  .cb .c { font-size: 13px; color: var(--brass); font-weight: 700; }
+  .cb .cd { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--brass); }
+  .cb.back { background: rgba(60,40,30,.9); }
+
+  #tip { position: absolute; z-index: 5; max-width: 300px; padding: 8px 10px; background: rgba(14,12,8,.96); border: 1px solid var(--brass); border-radius: 3px;
+    font-size: 15px; line-height: 1.25; pointer-events: none; display: none; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+  #tip h4 { margin: 0 0 3px; font-size: 18px; font-weight: 700; }
+  #tip .tc { color: var(--brass); font-weight: 700; }
+  #tip p { margin: 4px 0 0; color: var(--dim); }
+  #tip .req { color: var(--red); }
+
+  #modeHint { position: absolute; left: 50%; bottom: 206px; transform: translateX(-50%); padding: 5px 14px; background: rgba(14,12,8,.85); border: 1px solid var(--brass);
+    border-radius: 3px; font-size: 16px; pointer-events: none; white-space: nowrap; }
+
+  /* ---------- screens ---------- */
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; box-sizing: border-box; }
+  #title { background: radial-gradient(ellipse at 50% 40%, rgba(20,16,10,.15), rgba(14,11,7,.82) 75%); overflow-y: auto; justify-content: flex-start; padding-top: max(5vh, 16px); }
+  #logo { font-size: clamp(60px, 11vw, 132px); line-height: .85; margin: 0; color: var(--ink); letter-spacing: .02em;
+    text-shadow: 0 3px 0 #3a2a18, 0 6px 30px rgba(0,0,0,.7); }
+  #logo em { font-style: normal; color: var(--brass); }
+  .tagl { font-family: 'Special Elite', monospace; font-size: clamp(15px, 2vw, 20px); color: var(--ink); opacity: .85; margin: 10px 0 24px; text-shadow: 0 1px 3px #000; }
+  #modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: min(640px, 94vw); }
+  .mode { text-align: left; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; transition: border-color .15s, transform .15s; }
+  .mode:hover { border-color: var(--brass); transform: translateY(-2px); }
+  .mode h2 { margin: 0; font-size: 32px; line-height: 1; font-weight: 400; }
+  .mode p { margin: 6px 0 0; font-size: 16px; color: var(--dim); line-height: 1.25; }
+  .tlinks { margin-top: 18px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .credit { margin-top: 14px; font-size: 14px; color: var(--dim); }
+  .credit a { color: var(--brass); }
+
+  #setup, #camp, #help, #pause, #end, #brief { background: rgba(12,10,7,.88); overflow-y: auto; justify-content: flex-start; padding-top: max(4vh, 16px); }
+  .panelBox { width: min(980px, 96vw); text-align: left; }
+  .panelBox h1 { margin: 0 0 4px; font-size: clamp(38px, 6vw, 60px); font-weight: 400; line-height: 1; }
+  .panelBox h3 { margin: 18px 0 8px; font-size: 15px; letter-spacing: .2em; text-transform: uppercase; color: var(--dim); font-weight: 700; }
+  .lede { font-family: 'Special Elite', monospace; color: var(--dim); font-size: 16px; margin: 4px 0 0; }
+  #nations { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .nat { padding: 12px; background: var(--panel); border: 2px solid var(--line); border-radius: 4px; cursor: pointer; transition: border-color .15s; }
+  .nat:hover { border-color: rgba(216,180,90,.5); }
+  .nat.sel { border-color: var(--brass); background: rgba(50,42,28,.9); }
+  .nat .flag { height: 18px; display: flex; border-radius: 2px; overflow: hidden; margin-bottom: 8px; width: 54px; box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
+  .nat .flag i { flex: 1; }
+  .nat h2 { margin: 0; font-size: 28px; font-weight: 400; line-height: 1; }
+  .nat .side { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  .nat p { margin: 8px 0 0; font-size: 15px; color: var(--dim); line-height: 1.25; }
+  .nat p b { color: var(--ink); }
+  .opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 16px; }
+  .opt label { display: block; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .seg button { flex: 1; background: transparent; border: 0; border-right: 1px solid var(--line); padding: 7px 4px; cursor: pointer; font-size: 16px; }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--brass); color: #1b160d; font-weight: 700; }
+  .seedRow { display: flex; gap: 6px; }
+  .seedRow input { flex: 1; min-width: 0; background: rgba(0,0,0,.4); border: 1px solid var(--line); color: var(--ink); font: 16px 'Barlow Condensed', sans-serif; padding: 6px 8px; border-radius: 3px; }
+  .actions { display: flex; gap: 10px; margin-top: 22px; justify-content: flex-end; flex-wrap: wrap; }
+  .big { padding: 10px 26px; font-size: 22px; letter-spacing: .1em; text-transform: uppercase; border-radius: 3px; cursor: pointer; border: 1px solid var(--line); background: rgba(239,230,207,.08); }
+  .big:hover { background: rgba(239,230,207,.16); }
+  .big.go { background: var(--brass); color: #1b160d; border-color: var(--brass); font-weight: 700; }
+  .big.go:hover { filter: brightness(1.1); }
+  .modeDesc { font-size: 16px; color: var(--dim); margin-top: 6px; line-height: 1.3; }
+
+  #missions { display: grid; gap: 8px; }
+  .mis { display: grid; grid-template-columns: 56px 1fr auto; gap: 14px; align-items: center; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+  .mis:hover { border-color: var(--brass); }
+  .mis .no { font-size: 40px; color: var(--brass); text-align: center; }
+  .mis h2 { margin: 0; font-size: 26px; font-weight: 400; line-height: 1; }
+  .mis .when { font-family: 'Special Elite', monospace; font-size: 14px; color: var(--dim); }
+  .mis p { margin: 4px 0 0; color: var(--dim); font-size: 15px; }
+  .mis .medal { font-size: 14px; letter-spacing: .1em; color: var(--green); text-transform: uppercase; }
+
+  #help .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 6px 26px; font-size: 16px; }
+  #help .cols div { padding: 3px 0; border-bottom: 1px solid rgba(239,230,207,.07); display: flex; justify-content: space-between; gap: 10px; }
+  #help .cols b { color: var(--brass); white-space: nowrap; }
+  #help p { color: var(--dim); font-size: 16px; line-height: 1.35; margin: 6px 0; }
+  #help p b { color: var(--ink); }
+
+  #end h1, #pause h1, #brief h1 { text-align: center; }
+  #endSub, #briefWhen { text-align: center; font-family: 'Special Elite', monospace; color: var(--dim); font-size: 18px; margin-top: 6px; }
+  #endStats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 18px; }
+  .st { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; }
+  .st b { display: block; font-size: 30px; line-height: 1; }
+  .st span { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  #briefText { font-family: 'Special Elite', monospace; font-size: 17px; line-height: 1.55; color: var(--ink); background: rgba(239,230,207,.05); border: 1px solid var(--line);
+    padding: 16px 20px; margin-top: 16px; white-space: pre-line; }
+  #briefObj { margin-top: 12px; font-size: 18px; }
+  #briefObj li { margin: 3px 0; }
+  .centerActions { justify-content: center; }
+
+  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(12,10,7,.9); font-family: 'Special Elite', monospace; font-size: 22px; color: var(--dim); }
+  #fps { position: absolute; right: 8px; bottom: 2px; font: 11px monospace; color: #fff; opacity: .5; pointer-events: none; }
+
+  @media (max-width: 760px) {
+    #nations { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #modes { grid-template-columns: 1fr; }
+    #bottom { height: 150px; }
+    #mmWrap { width: 120px; height: 120px; }
+    #cmd { width: 220px; grid-auto-rows: 40px; height: 134px; }
+    .cb .t { font-size: 12px; }
+    #selPanel { height: 120px; }
+    #powers .pw { width: 150px; }
+    .selBody .desc { display: none; }
+  }
+</style>
+<div id="app">
+  <canvas id="c"></canvas>
+  <canvas id="ov"></canvas>
+
+  <div id="hud">
+    <div id="topbar">
+      <div class="res" title="Supply: earned from your HQ, captured sectors and depots"><span class="ic" style="background:var(--brass)"></span><span id="supply">0</span><small id="income">+0/min</small></div>
+      <div class="res" title="Population used / cap. Build Supply Depots to raise the cap"><small>POP</small><span id="pop">0/0</span></div>
+      <div id="objWrap"></div>
+      <span id="weatherTag"></span>
+      <button class="tbtn" id="speedBtn" title="Game speed">1×</button>
+      <button class="tbtn" id="helpBtn" title="Controls (F1)">?</button>
+      <button class="tbtn" id="menuBtn" title="Pause (Esc)">Menu</button>
+    </div>
+    <div id="powers"></div>
+    <div id="alerts"></div>
+    <div id="banner" class="fell"></div>
+    <div id="modeHint" hidden></div>
+    <div id="bottom">
+      <div id="mmWrap"><canvas id="mm" width="360" height="360"></canvas></div>
+      <div id="selPanel" class="empty"></div>
+      <div id="cmd"></div>
+    </div>
+  </div>
+  <div id="tip"></div>
+
+  <div id="title" class="screen">
+    <h1 id="logo" class="fell">Mud <em>&amp;</em> Iron</h1>
+    <div class="tagl">The Western Front, 1914 &ndash; 1918</div>
+    <div id="modes">
+      <div class="mode" data-mode="skirmish"><h2 class="fell">Skirmish</h2><p>One sector, one enemy. Build up, take the ground, destroy their headquarters.</p></div>
+      <div class="mode" data-mode="campaign"><h2 class="fell">Campaign</h2><p>Five operations from the first gas clouds to the Hundred Days.</p></div>
+      <div class="mode" data-mode="frontline"><h2 class="fell">Frontline</h2><p>A tug-of-war across rows of trench sectors. Push the line into their rear.</p></div>
+      <div class="mode" data-mode="survival"><h2 class="fell">Survival</h2><p>Hold your trench against waves that never stop coming. How long can you last?</p></div>
+    </div>
+    <div class="tlinks"><button class="big" id="helpOpen">How to play</button></div>
+    <div class="credit">Best with a mouse and keyboard. Part of <a href="../">Chinny's AI Games</a>.</div>
+  </div>
+
+  <div id="setup" class="screen" hidden>
+    <div class="panelBox">
+      <h1 class="fell" id="setupTitle">Skirmish</h1>
+      <div class="modeDesc" id="setupDesc"></div>
+      <h3>Choose your nation</h3>
+      <div id="nations"></div>
+      <h3>Battle settings</h3>
+      <div class="opts" id="opts"></div>
+      <div class="actions"><button class="big" id="setupBack">Back</button><button class="big go" id="setupGo">To the front</button></div>
+    </div>
+  </div>
+
+  <div id="camp" class="screen" hidden>
+    <div class="panelBox">
+      <h1 class="fell">Campaign</h1>
+      <div class="lede">Five operations. Pick the army you fight for, then choose an operation.</div>
+      <h3>Choose your nation</h3>
+      <div id="campNations"></div>
+      <h3>Operations</h3>
+      <div id="missions"></div>
+      <div class="actions"><button class="big" id="campBack">Back</button></div>
+    </div>
+  </div>
+
+  <div id="brief" class="screen" hidden>
+    <div class="panelBox">
+      <h1 class="fell" id="briefTitle"></h1>
+      <div id="briefWhen"></div>
+      <div id="briefText"></div>
+      <ul id="briefObj"></ul>
+      <div class="actions centerActions"><button class="big" id="briefBack">Back</button><button class="big go" id="briefGo">Begin</button></div>
+    </div>
+  </div>
+
+  <div id="help" class="screen" hidden>
+    <div class="panelBox">
+      <h1 class="fell">Field Manual</h1>
+      <h3>Camera</h3>
+      <div class="cols">
+        <div><span>Pan</span><b>WASD / arrows / screen edge / middle-drag</b></div>
+        <div><span>Rotate</span><b>Q / E or Alt + drag</b></div>
+        <div><span>Zoom</span><b>Mouse wheel</b></div>
+        <div><span>Jump to selection / last alert</span><b>Space</b></div>
+      </div>
+      <h3>Orders</h3>
+      <div class="cols">
+        <div><span>Select / box-select</span><b>Left click / drag</b></div>
+        <div><span>Add to selection</span><b>Shift + click</b></div>
+        <div><span>Select all of a type on screen</span><b>Double-click</b></div>
+        <div><span>Move / attack / capture / repair</span><b>Right click</b></div>
+        <div><span>Queue orders</span><b>Shift + right click</b></div>
+        <div><span>Attack-move</span><b>F, then click</b></div>
+        <div><span>Stop</span><b>H</b></div>
+        <div><span>Unit abilities / production</span><b>Z X C V B N M</b></div>
+        <div><span>Retreat to HQ</span><b>R</b></div>
+        <div><span>Reinforce squad</span><b>T</b></div>
+        <div><span>Control groups</span><b>Ctrl + 1&ndash;9, then 1&ndash;9</b></div>
+        <div><span>Select whole army</span><b>Ctrl + A</b></div>
+        <div><span>Next idle engineer</span><b>.</b></div>
+        <div><span>Command powers</span><b>Y U I O</b></div>
+        <div><span>Pause</span><b>Esc / P</b></div>
+      </div>
+      <h3>How the war works</h3>
+      <p><b>Supply</b> comes from your HQ and every sector flag you hold. Infantry capture a flag by standing next to it with no enemies nearby. <b>Supply Depots</b> raise your population cap and let squads reinforce nearby.</p>
+      <p><b>Engineers</b> dig trenches (Z, then drag), string barbed wire (X, then drag), build structures (C), cut wire and repair vehicles and buildings (right-click). Buildings must go near your HQ or a sector you hold.</p>
+      <p><b>Cover matters.</b> Infantry in a trench take a fraction of the losses they would in the open. Shell holes, ruins and woods help a little. Barbed wire slows infantry to a crawl and stops armored cars, but tanks crush it.</p>
+      <p><b>Suppression</b> from machine guns and shells pins infantry: they go prone and fire poorly. Push them past their limit and they break and run for the HQ. Units earn up to three <b>veterancy</b> stars from kills.</p>
+      <p><b>Tanks</b> cross trenches and shrug off rifle fire, but they are slow and can break down. Field guns, grenade bundles and other tanks kill them. Armored cars are fast but cannot cross trenches or wire.</p>
+      <p><b>Command powers</b> (top right) unlock with an Airfield (recon flights, strafing runs) and an Artillery Park (gas, creeping barrage). Research <b>gas masks</b> at your HQ before the enemy does it to you. <b>Rain</b> turns the ground to mud and slows everything, tanks most of all.</p>
+      <div class="actions"><button class="big go" id="helpClose">Back</button></div>
+    </div>
+  </div>
+
+  <div id="pause" class="screen" hidden>
+    <div class="panelBox" style="width:min(460px,94vw)">
+      <h1 class="fell">Paused</h1>
+      <div class="actions centerActions" style="flex-direction:column;align-items:stretch">
+        <button class="big go" id="resumeBtn">Resume</button>
+        <button class="big" id="pauseHelp">Field manual</button>
+        <button class="big" id="restartBtn">Restart battle</button>
+        <button class="big" id="quitBtn">Quit to menu</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="end" class="screen" hidden>
+    <div class="panelBox">
+      <h1 class="fell" id="endTitle">Victory</h1>
+      <div id="endSub"></div>
+      <div id="endStats"></div>
+      <div class="actions centerActions"><button class="big" id="endMenu">Main menu</button><button class="big" id="endWatch">View battlefield</button><button class="big go" id="endAgain">Play again</button></div>
+    </div>
+  </div>
+
+  <div id="loading" hidden>Surveying the sector&hellip;</div>
+  <div id="fps"></div>
+</div>
