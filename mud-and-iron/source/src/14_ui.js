@@ -237,7 +237,10 @@ function setMode(m, md) {
     buildmenu: () => 'Choose a building to construct',
   };
   hudEl.hint.hidden = !m;
-  hudEl.hint.textContent = hints[m] ? hints[m]() : '';
+  let txt = hints[m] ? hints[m]() : '';
+  if (UI.lastInput === 'touch') txt = txt.replace(/left-click/g, 'tap').replace('(or click start and end)', '(or tap start and end)').replace(/ Shift to [^.]*\./g, '').replace('Esc to cancel', '✕ cancels');
+  hudEl.hint.textContent = txt;
+  if (typeof TOUCH !== 'undefined') TOUCH.confirm = null;
   UI.cardSig = '';
   UI.powersHTML = '';
 }
@@ -245,6 +248,7 @@ const GHOST_MAT = new THREE.MeshBasicMaterial({ color: 0x66ff66, transparent: tr
 
 // ---------- tooltips ----------
 function showTip(ev, html) {
+  if (UI.lastInput === 'touch' && !TOUCH.tipOK) return;
   const t = hudEl.tip;
   t.innerHTML = html; t.style.display = 'block';
   const r = t.getBoundingClientRect();
@@ -276,7 +280,7 @@ function updateSelPanel() {
   const el = hudEl.sel;
   const list = SEL.filter((e) => !e.dead);
   if (!list.length) {
-    if (UI.panelSig !== 'none') { UI.panelSig = 'none'; el.className = 'empty'; el.innerHTML = '<div style="color:var(--dim);font-size:15px;padding-top:40px;text-align:center">Select units or buildings. Right-click to give orders.</div>'; }
+    if (UI.panelSig !== 'none') { UI.panelSig = 'none'; el.className = 'empty'; el.innerHTML = '<div style="color:var(--dim);font-size:15px;padding-top:40px;text-align:center">' + (UI.lastInput === 'touch' ? 'Tap units to select them, then tap the ground or an enemy to give orders.' : 'Select units or buildings. Right-click to give orders.') + '</div>'; }
     return;
   }
   el.className = '';
@@ -427,7 +431,7 @@ function pickEnt(sx, sy, teamOnly) {
         if (!m.alive) continue;
         if (!project(m.x, m.y + 1.1, m.z, _sp)) continue;
         const d = Math.hypot(_sp.x - sx, _sp.y - sy);
-        if (d < 16 && d < bd) { bd = d; best = e; }
+        if (d < (UI.lastInput === 'touch' ? 30 : 16) && d < bd) { bd = d; best = e; }
       }
     } else if (e.kind === 'veh') {
       if (!project(e.x, e.y + 1.2, e.z, _sp)) continue;
@@ -564,6 +568,7 @@ function bindInput() {
   const cv = canvas;
   cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
   addEventListener('mousemove', (ev) => {
+    if (ev.movementX || ev.movementY) UI.lastInput = 'mouse';
     UI.mx = ev.clientX; UI.my = ev.clientY;
     if (UI.drag) { UI.drag.x1 = ev.clientX; UI.drag.y1 = ev.clientY; }
     if (CAM.mdrag) { CAM.mdrag.dx += ev.movementX; CAM.mdrag.dy += ev.movementY; }
@@ -681,39 +686,6 @@ function bindInput() {
   addEventListener('mousemove', (ev) => { if (UI.mmDrag) { const p = mmPos(ev); CAM.x = p.x; CAM.z = p.z; } });
   addEventListener('mouseup', () => { UI.mmDrag = false; });
 
-  // touch: one finger pans or taps, two fingers zoom
-  let touches = {}, tapStart = null, pinch = null;
-  cv.addEventListener('touchstart', (ev) => {
-    audioInit();
-    for (const t of ev.changedTouches) touches[t.identifier] = { x: t.clientX, y: t.clientY };
-    const ids = Object.keys(touches);
-    if (ids.length === 1) { const t = ev.changedTouches[0]; tapStart = { x: t.clientX, y: t.clientY, t: performance.now(), moved: false }; }
-    if (ids.length === 2) { const [a, b] = ids.map((i) => touches[i]); pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: CAM.tdist }; tapStart = null; }
-    ev.preventDefault();
-  }, { passive: false });
-  cv.addEventListener('touchmove', (ev) => {
-    for (const t of ev.changedTouches) {
-      const o = touches[t.identifier]; if (!o) continue;
-      const dx = t.clientX - o.x, dy = t.clientY - o.y;
-      if (Object.keys(touches).length === 1) { panBy(-dx, -dy); if (tapStart && Math.hypot(t.clientX - tapStart.x, t.clientY - tapStart.y) > 10) tapStart.moved = true; }
-      o.x = t.clientX; o.y = t.clientY;
-    }
-    if (pinch) { const ids = Object.keys(touches); if (ids.length === 2) { const [a, b] = ids.map((i) => touches[i]); CAM.tdist = clamp(pinch.dist * pinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 26, 170); } }
-    ev.preventDefault();
-  }, { passive: false });
-  cv.addEventListener('touchend', (ev) => {
-    for (const t of ev.changedTouches) delete touches[t.identifier];
-    if (!Object.keys(touches).length) pinch = null;
-    if (tapStart && !tapStart.moved && performance.now() - tapStart.t < 400 && GAME.state === 'play') {
-      const t = ev.changedTouches[0];
-      if (UI.mode && leftAction(t.clientX, t.clientY, false)) { tapStart = null; return; }
-      const e = pickEnt(t.clientX, t.clientY);
-      if (e && e.team === 0) selectOnly([e]);
-      else if (SEL.length) rightClick(t.clientX, t.clientY, false);
-      else if (e) selectOnly([e]);
-    }
-    tapStart = null;
-  });
 }
 function centerOn(list) {
   if (!list.length) return;
