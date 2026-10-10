@@ -11,7 +11,7 @@ function enableTouchUI() {
   TOUCH.on = true;
   document.body.classList.add('touch');
   const c = $('.credit');
-  if (c) c.innerHTML = 'Touch: tap to select and command, drag to pan, pinch to zoom. Best in landscape. Part of <a href="../">Chinny\'s AI Games</a>.';
+  if (c) c.innerHTML = 'Touch: tap to select and command, drag to pan, pinch to zoom. Best in landscape. Part of <a href="../">Chinny\'s Arcade</a>.';
 }
 
 const tpos = (t) => ({ x: t.clientX, y: t.clientY });

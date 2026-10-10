@@ -1,4 +1,4 @@
-# arcade
+# Chinny's Arcade
 
 Collection of experimental browser games made with Claude. **Play them at https://chinny.github.io/arcade/** Each game is a self-contained folder — open its `index.html` in a browser (WebGL 2 required for the 3D ones).
 
